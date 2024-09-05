@@ -1,16 +1,16 @@
 ```powershell
-#Check if profile exists
+# 1. Check if PS profile exists
 Test-Path $PROFILE
 
-#If not run command to create profile
-New-Item -ItemType File -Path $PROFILE ;  New-Item -ItemType Directory -Path $(Split-Path $PROFILE) -Name Test
+# 1.a If not found (returns "False") run below command to create PS profile and scripts folder
+New-Item -ItemType File -Path $PROFILE ; New-Item -ItemType Directory -Path $(Split-Path $PROFILE) -Name Scripts
 
-#Open the profile
+# 2. Open the profile, can use any editor
 notepad.exe $PROFILE
 
-# Add the comment and line to profile
-# Import local scripts
+# 3. Add the comment and line to profile
+# Import local script(s)
 . "$(Split-Path -Path $PROFILE)\Scripts\bttc-cli.ps1"
 
-# Add the cli script file to your Scripts folder where the profile is
+# 4. Add the cli script file to your Scripts folder where the profile is
 ```

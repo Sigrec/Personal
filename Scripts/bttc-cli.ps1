@@ -3,7 +3,7 @@ Function Get-BTTC-Info {
     Write-Host "    Sulix (Prem)"
     ""
     Write-Host "VERSION"
-    Write-Host "    v1.0.0"
+    Write-Host "    v1.0.1"
     ""
     Write-Host "SYNTAX"
     Write-Host "    bttc [-Command] <string> [-Branch] <string> [-Artisan] <string> [-Archetype] <string> [-Timezone] <string>"
@@ -37,11 +37,20 @@ Function Get-BTTC-Info {
 Function bttc()
 {
     param(
-        [Parameter(Mandatory=$true, Position=0)][string]$Command,
-        [Parameter(Mandatory=$false)][string]$Branch,
-        [Parameter(Mandatory=$false)][string]$Artisan,
-        [Parameter(Mandatory=$false)][string]$Archetype,
-        [Parameter(Mandatory=$false)][string]$Timezone
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$Command,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Branch,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Artisan,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Archetype,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Timezone
     )
 
     # Constants
@@ -55,9 +64,6 @@ Function bttc()
     $Command = $Command.ToLower()
     Switch($Command) {
         {$_ -in "list", "ls", "members"} {
-            $BRANCH_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):C$($END_INDEX)&tq=SELECT%20A%2CB%2CC%20WHERE%20C%20%3D%20'$Branch'"
-            $ARTISAN_QUERY = "&sheet=$ARTISAN_SHEET&range=A$($START_INDEX):D$($END_INDEX)&tq=SELECT%20A%2CB%2CC%2CD%20WHERE%20C%20contains%20'$Artisan'%20OR%20D%20contains%20'$Artisan'"
-            $ARCHETYPE_QUERY = "&sheet=$ARCHETYPE_SHEET&range=A$($START_INDEX):C$($END_INDEX)&tq=SELECT%20A%2CB%2CC%20WHERE%20C%20%3D%20'$Archetype'"
             $Response_List = [System.Collections.Generic.List[PSCustomObject]]::new()
             $Input_List = [System.Collections.Generic.List[String]]::new()
 
@@ -71,10 +77,13 @@ Function bttc()
                 break
             }
             
+            [bool]$HasTimezone = $false
             if (![string]::IsNullOrEmpty($Timezone)) { 
-                $Timezone = $Timezone.ToUpper() 
+                $HasTimezone = $true
+                $Timezone = Get-Timezone($Timezone)
+                if ($Timezone -eq "Error") { break; }
                 $Input_List.Add($Timezone)
-                $TIMEZONE_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CF%20WHERE%20upper(F)%20%3D%20'$Timezone'"
+                $TIMEZONE_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CF%20WHERE%20F%20%3D%20'$Timezone'"
             }
             else {
                 $TIMEZONE_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CF"
@@ -85,7 +94,10 @@ Function bttc()
             
             if (![string]::IsNullOrEmpty($Branch)) { 
                 $Branch = Get-Branch($Branch.ToLower())
+                if ($Branch -eq "Error") { break }
                 $Input_List.Add($Branch)
+
+                [string]$BRANCH_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):C$($END_INDEX)&tq=SELECT%20A%2CB%2CC%20WHERE%20C%20%3D%20'$Branch'"
                 Write-Debug "Branch Query = $BRANCH_QUERY"
                 $Branch_Response = Invoke-WebRequest -Uri "$($URL)$($BRANCH_QUERY)" | ConvertFrom-Csv  -Header "Discord Name", "Character Name", "Branch"
                 $Response_List.Add($Branch_Response)
@@ -93,7 +105,10 @@ Function bttc()
 
             if (![string]::IsNullOrEmpty($Artisan)) { 
                 $Artisan = Get-Artisan($Artisan.ToLower())
+                if ($Artisan -eq "Error") { break }
                 $Input_List.Add($Artisan)
+
+                [string]$ARTISAN_QUERY = "&sheet=$ARTISAN_SHEET&range=A$($START_INDEX):D$($END_INDEX)&tq=SELECT%20A%2CB%2CC%2CD%20WHERE%20C%20contains%20'$Artisan'%20OR%20D%20contains%20'$Artisan'"
                 Write-Debug "Artisan Query = $ARTISAN_QUERY"
                 $Artisan_Response = Invoke-WebRequest -Uri "$($URL)$($ARTISAN_QUERY)" | ConvertFrom-Csv -Header "Discord Name", "Character Name"
                 $Response_List.Add($Artisan_Response)
@@ -101,7 +116,10 @@ Function bttc()
 
             if (![string]::IsNullOrEmpty($Archetype)) { 
                 $Input_List.Add($Archetype)
-                $Archetype = (Get-Culture).TextInfo.ToTitleCase($Archetype.ToLower()) 
+                $Archetype = Get-Archetype($Archetype) 
+                if ($Archetype -eq "Error") { break }
+
+                [string]$ARCHETYPE_QUERY = "&sheet=$ARCHETYPE_SHEET&range=A$($START_INDEX):C$($END_INDEX)&tq=SELECT%20A%2CB%2CC%20WHERE%20C%20%3D%20'$Archetype'"
                 Write-Debug "Archetype Query = $ARCHETYPE_QUERY"
                 $Archetype_Response = Invoke-WebRequest -Uri "$($URL)$($ARCHETYPE_QUERY)" | ConvertFrom-Csv -Header "Discord Name", "Character Name"
                 $Response_List.Add($Archetype_Response) 
@@ -110,7 +128,7 @@ Function bttc()
             while ($Response_List.Count -gt 1) {
                 $Initial_Count = $Response_List.Count - 1
                 For ($i = 0; $i -lt $Initial_Count; $i += 2) {
-                    $Response_List.Add($(Compare-Output $Input_List[$i] $Input_List[$i + 1] $Response_List[$i] $Response_List[$i + 1])) 
+                    $Response_List.Add($(Compare-Output $Input_List[$i] $Input_List[$i + 1] $Response_List[$i] $Response_List[$i + 1] $HasTimezone)) 
                     $Input_List.Add("$($Input_List[$i]) + $($Input_List[$i + 1])")
                 }
 
@@ -124,7 +142,13 @@ Function bttc()
                 }
             }
 
-            $Response_List[0] | Sort-Object -Property "Discord Name" | Format-Table -AutoSize
+            if ($HasTimezone -eq $false) {
+                $Response_List[0] | Sort-Object -Property "Discord Name" | Format-Table -AutoSize
+            }
+            else {
+                Write-Debug "CHECK"
+                $Response_List[0] | Select-Object -Property * -ExcludeProperty Timezone | Sort-Object -Property "Discord Name" | Format-Table -AutoSize
+            }
         }
         {$_ -in "help", "h"} { 
             Get-BTTC-Info
@@ -139,7 +163,12 @@ Function bttc()
     }
 }
 
-Function Compare-Output([string]$Input1, [string]$Input2, [System.Object[]]$Response1, [System.Object[]]$Response2) {
+Function Compare-Output(
+    [string]$Input1, 
+    [string]$Input2, 
+    [System.Object[]]$Response1, 
+    [System.Object[]]$Response2
+) {
     $Response = [System.Collections.Generic.List[PSCustomObject]]::new()
     ForEach ($a in $Response1) {
         ForEach ($b in $Response2) {
@@ -154,8 +183,14 @@ Function Compare-Output([string]$Input1, [string]$Input2, [System.Object[]]$Resp
             }
         }
     }
+
     if ($Response.Count -eq 0) {
-        Write-Host "No Entries Found for `"$Input1 + $Input2`""
+        if (![string]::IsNullOrEmpty($Input2)) {
+            Write-Host "No Entries Found for `"$Input1 + $Input2`""
+        }
+        else {
+            Write-Host "No Entries Found for `"$Input1`""
+        }
     }
     return $Response
 }
@@ -169,7 +204,75 @@ Function Compare-ObjectBool {
       [PSCustomObject] $secondObject
     )
     -not (Compare-Object $firstObject.PSObject.Properties $secondObject.PSObject.Properties -Property "Discord Name")
-  }
+}
+
+Function Get-Archetype($Archetype) {
+    Switch($Archetype) {
+        { $_ -like "Rogue" } {
+            $Archetype = "Rogue"
+        }
+        { $_ -like "Fighter" } {
+            $Archetype = "Fighter"
+        }
+        { $_ -like "Cleric" } {
+            $Archetype = "Cleric"
+        }
+        { $_ -like "Tank" } {
+            $Archetype = "Tank"
+        }
+        { $_ -like "Summoner" } {
+            $Archetype = "Summoner"
+        }
+        { $_ -like "Bard" } {
+            $Archetype = "Bard"
+        }
+        { $_ -like "Ranger" } {
+            $Archetype = "Ranger"
+        }
+        { $_ -like "Mage" } {
+            $Archetype = "Mage"
+        }
+        default {
+            Write-Error "`"$($Archetype)`" is not a valid Archetype"
+            return "Error"
+        }
+    }
+    return $Archetype
+}
+
+Function Get-Timezone($Timezone) {
+    Switch($Timezone) {
+        { $_ -like "PST" } {
+            $Timezone = "PST"
+        }
+        { $_ -like "CST" } {
+            $Timezone = "CST"
+        }
+        { $_ -like "MST" } {
+            $Timezone = "MST"
+        }
+        { $_ -like "EST" } {
+            $Timezone = "EST"
+        }
+        { $_ -like "European" } {
+            $Timezone = "European"
+        }
+        { $_ -like "New Zealand" } {
+            $Timezone = "New Zealand"
+        }
+        { $_ -like "Australia" } {
+            $Timezone = "Australia"
+        }
+        { $_ -like "Something Wild" } {
+            $Timezone = "Something Wild"
+        }
+        default {
+            Write-Error "`"$($Timezone)`" is not a valid Timezone"
+            return "Error"
+        }
+    }
+    return $Timezone
+}
 
 Function Get-Branch($Branch) {
     Switch($Branch) {
@@ -184,7 +287,7 @@ Function Get-Branch($Branch) {
         }
         default {
             Write-Error "`"$($Branch)`" is not a valid Branch name"
-            break
+            return "Error"
         }
     }
     return $Branch
@@ -260,7 +363,7 @@ Function Get-Artisan($Artisan) {
         }
         default {
             Write-Error "`"$($Artisan)`" is not a valid Artisan"
-            break
+            return "Error"
         }
     }
     return $Artisan

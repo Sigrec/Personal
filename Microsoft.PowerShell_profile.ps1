@@ -7,7 +7,7 @@ Import-Module posh-git
 Import-Module PSReadLine
 
 # Import local scripts
-. "$(Split-Path -Path $PROFILE.CurrentUserCurrentHost)\Scripts\bttc-cli.ps1"
+. "$(Split-Path -Path $PROFILE)\Scripts\bttc-cli.ps1"
 
 # Enable Read line
 if ($host.Name -eq 'ConsoleHost')

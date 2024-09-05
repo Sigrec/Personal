@@ -3,14 +3,14 @@
 Test-Path $PROFILE
 
 #If not run command to create profile
-New-Item -ItemType File -Path $PROFILE
+New-Item -ItemType File -Path $PROFILE ;  New-Item -ItemType Directory -Path $(Split-Path $PROFILE) -Name Test
 
 #Open the profile
 notepad.exe $PROFILE
 
 # Add the comment and line to profile
 # Import local scripts
-. "$(Split-Path -Path $PROFILE.CurrentUserCurrentHost)\Scripts\bttc-cli.ps1"
+. "$(Split-Path -Path $PROFILE)\Scripts\bttc-cli.ps1"
 
 # Add the cli script file to your Scripts folder where the profile is
 ```

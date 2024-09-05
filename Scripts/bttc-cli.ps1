@@ -11,7 +11,7 @@ Function Get-BTTC-Info {
     Write-Host "COMMANDS"
     Write-Host "    [`"ls`", `"list`", `"members`"] - Lists the `"Discord Name`", `"Character Name`", `"Timezone`", & `"Branch`" of BTTC members from the sheet, can use `"Branch`", `"Artisan`", and/or `"Archetype`" params to filter output"
     Write-Host "    [`"links`"] - Displays various links related to BTTC guild"
-    Write-Host "    [`"help`", `"h`"] - Displays information about the binary"
+    Write-Host "    [`"help`", `"h`"] - Displays information about the CLI"
     ""
     Write-Host "PARAMETERS"
     Write-Host "    -Command <String> [CaseSensitive]"

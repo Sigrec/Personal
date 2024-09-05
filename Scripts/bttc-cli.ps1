@@ -62,11 +62,26 @@ Function bttc()
             $Input_List = [System.Collections.Generic.List[String]]::new()
 
             if (!$Branch -and !$Artisan -and !$Archetype) {
+                Write-Debug "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CC%2CF"
                 $Response = Invoke-WebRequest -Uri "$($URL)&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CC%2CF" | ConvertFrom-Csv
                 if (![string]::IsNullOrEmpty($Timezone)) {
                     $Response = $Response | Where-Object { $_.Timezone.ToUpper() -eq $Timezone } | Select-Object -Property * -ExcludeProperty Timezone
                 }
+                $Response | Sort-Object -Property "Discord Name" | Format-Table -AutoSize
+                break
             }
+            
+            if (![string]::IsNullOrEmpty($Timezone)) { 
+                $Timezone = $Timezone.ToUpper() 
+                $Input_List.Add($Timezone)
+                $TIMEZONE_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CF%20WHERE%20upper(F)%20%3D%20'$Timezone'"
+            }
+            else {
+                $TIMEZONE_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CF"
+            }
+            Write-Debug "Timezone Query = $TIMEZONE_QUERY"
+            $TIMEZONE_RESPONSE = Invoke-WebRequest -Uri "$($URL)$($TIMEZONE_QUERY)" | ConvertFrom-Csv -Header "Discord Name", "Character Name", "Timezone"
+            $Response_List.Add($TIMEZONE_RESPONSE)
             
             if (![string]::IsNullOrEmpty($Branch)) { 
                 $Branch = Get-Branch($Branch.ToLower())
@@ -91,18 +106,6 @@ Function bttc()
                 $Archetype_Response = Invoke-WebRequest -Uri "$($URL)$($ARCHETYPE_QUERY)" | ConvertFrom-Csv -Header "Discord Name", "Character Name"
                 $Response_List.Add($Archetype_Response) 
             }
-
-            if (![string]::IsNullOrEmpty($Timezone)) { 
-                $Timezone = $Timezone.ToUpper() 
-                $Input_List.Add($Timezone)
-                $TIMEZONE_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CF%20WHERE%20upper(F)%20%3D%20'$Timezone'"
-            }
-            else {
-                $TIMEZONE_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CF"
-            }
-            Write-Debug "Timezone Query = $TIMEZONE_QUERY"
-            $TIMEZONE_RESPONSE = Invoke-WebRequest -Uri "$($URL)$($TIMEZONE_QUERY)" | ConvertFrom-Csv -Header "Discord Name", "Character Name", "Timezone"
-            $Response_List.Add($TIMEZONE_RESPONSE)
 
             while ($Response_List.Count -gt 1) {
                 $Initial_Count = $Response_List.Count - 1

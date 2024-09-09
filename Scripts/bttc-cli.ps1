@@ -124,7 +124,6 @@ Function bttc()
                     $Header =  "Discord Name", "Character Name", "Primary Archetype"
                 }
                 else {
-                    Write-Host "CHECK 4"
                     $Header = "Discord Name", "Character Name"
                 }
                 $ArchetypeResponse = Invoke-WebRequest -Uri "$($URL)$($ARCHETYPE_QUERY)" | ConvertFrom-Csv -Header $Header

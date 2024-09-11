@@ -1,4 +1,4 @@
-$VERSION = "v1.1.0"
+$VERSION = "v1.2.0"
 
 Function bttc()
 {
@@ -16,7 +16,10 @@ Function bttc()
         [System.Collections.Generic.List[string]]$Archetype,
         
         [Parameter(Mandatory=$false)]
-        [System.Collections.Generic.List[string]]$Timezone
+        [System.Collections.Generic.List[string]]$Timezone,
+
+        [Parameter(Mandatory=$false)]
+        [System.Collections.Generic.List[string]]$RP
     )
 
     # Constants
@@ -34,7 +37,7 @@ Function bttc()
             $PropertyInputs = [System.Collections.Generic.List[string]]::new()
             $InputList = [System.Collections.Generic.List[string]]::new()
 
-            if (!$Branch -and !$Artisan -and !$Archetype ) {
+            if (!$Branch -and !$Artisan -and !$Archetype -and !$RP) {
                 Write-Debug "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CC%2CF"
                 $Response = Invoke-WebRequest -Uri "$($URL)&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CC%2CF" | ConvertFrom-Csv
                 if (![string]::IsNullOrEmpty($Timezone)) {
@@ -58,7 +61,7 @@ Function bttc()
                 $TIMEZONE_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):F$($END_INDEX)&tq=SELECT%20A%2CB%2CF"
             }
             $PropertyInputs.Add("Timezone")
-            Write-Debug "Timezone Query = $TIMEZONE_QUERY"
+            Write-Debug "Timezone Query: $TIMEZONE_QUERY"
             $TIMEZONE_RESPONSE = Invoke-WebRequest -Uri "$($URL)$($TIMEZONE_QUERY)" | ConvertFrom-Csv -Header "Discord Name", "Character Name", "Timezone"
             $ResponseList.Add($TIMEZONE_RESPONSE)
             
@@ -67,7 +70,7 @@ Function bttc()
                 if ($Branch -eq "Error") { break }
 
                 [string]$BRANCH_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):C$($END_INDEX)&tq=SELECT%20A%2CB%2CC%20WHERE%20$(Get-Query $Branch "C")"
-                Write-Debug "Branch Query = $BRANCH_QUERY"
+                Write-Debug "Branch Query: $BRANCH_QUERY"
 
                 $Header = @()
                 if ($Branch.Count -gt 1) {
@@ -105,7 +108,7 @@ Function bttc()
                     $Header = "Discord Name", "Character Name"
                 }
 
-                Write-Debug "Artisan Query = $ARTISAN_QUERY"
+                Write-Debug "Artisan Query: $ARTISAN_QUERY"
                 $ArtisanResponse = Invoke-WebRequest -Uri "$($URL)$($ARTISAN_QUERY)" | ConvertFrom-Csv -Header $Header
                 $ResponseList.Add($ArtisanResponse)
             }
@@ -116,7 +119,7 @@ Function bttc()
                 
                 [string]$ARCHETYPE_QUERY = "&sheet=$ARCHETYPE_SHEET&range=A$($START_INDEX):C$($END_INDEX)&tq=SELECT%20A%2CB%2CC%20WHERE%20$(Get-Query $Archetype "C")"
 
-                Write-Debug "Archetype Query = $ARCHETYPE_QUERY"
+                Write-Debug "Archetype Query: $ARCHETYPE_QUERY"
                 $Header = @()
                 if ($Archetype.Count -gt 1) {
                     $PropertyInputs.Add("Primary Archetype")
@@ -128,6 +131,28 @@ Function bttc()
                 }
                 $ArchetypeResponse = Invoke-WebRequest -Uri "$($URL)$($ARCHETYPE_QUERY)" | ConvertFrom-Csv -Header $Header
                 $ResponseList.Add($ArchetypeResponse)
+            }
+
+            if (![string]::IsNullOrEmpty($RP)) {
+                for ($i = 0; $i -lt $RP.Count; $i++) {
+                    $RP[$i] = Get-RPPriority($RP[$i])
+                }
+                if ($RP -eq "Error") { break }
+                
+                [string]$RP_QUERY = "&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):G$($END_INDEX)&tq=SELECT%20A%2CB%2CG%20WHERE%20$(Get-Query $RP "G")"
+
+                Write-Debug "RP Query: $RP_QUERY"
+                $Header = @()
+                if ($RP.Count -gt 1) {
+                    $PropertyInputs.Add("RP Priority")
+                    $InputList.Add("($($RP -Join ' | '))")
+                    $Header =  "Discord Name", "Character Name", "RP Priority"
+                }
+                else {
+                    $Header = "Discord Name", "Character Name"
+                }
+                $RPResponse = Invoke-WebRequest -Uri "$($URL)$($RP_QUERY)" | ConvertFrom-Csv -Header $Header
+                $ResponseList.Add($RPResponse)
             }
 
             while ($ResponseList.Count -gt 1) {
@@ -376,6 +401,30 @@ Function Get-Branch(
     return $Branch
 }
 
+Function Get-RPPriority(
+    [string]$RP
+) {
+    switch($RP) {
+        { $_ -like "High"  } {
+            $RP = "High"
+        }
+        { $_ -like "Medium"  } {
+            $RP = "Medium"
+        }
+        { $_ -like "Low"} {
+            $RP = "Low"
+        }
+        { $_ -like "None"} {
+            $RP = "None"
+        }
+        default {
+            Write-Error "`"$RP`" is not a valid RP Priority"
+            return "Error"
+        }
+    }
+    return $RP
+}
+
 Function Get-Artisan(
     [string]$Artisan
 ) {
@@ -465,6 +514,9 @@ Legend
 📜 -> Higher level identifier for feature changes
 ❌ -> In-progress feature will be fixed in later release
 
+v1.2.0 - Sept 11th, 2024
+✅ Added new filter "RP" to filter for a BTTC members "RP Priority"
+
 v1.1.0 - Sept 8th, 2024
 ✅ Able to filter for multiple Archetype(s), Branch(es), Artisan(s) and/or Timezone(s) parameter(s) at the same time, this constitues or'ing NOT and'ing
 🔥 Fixed help command text
@@ -532,5 +584,8 @@ Function Get-BTTC-Info {
     ""
     Write-Host "    -Timezone <String[]> (Optional) [Not CaseSensitive]"
     Write-Host "        Specifies the AoC primary archetype, use quotes `"`" if the artisan has a space"
+    ""
+    Write-Host "    -RP <String[]> (Optional) [Not CaseSensitive]"
+    Write-Host "        Specifies the BTTC `"RP Priority`""
     ""
 }

@@ -447,8 +447,8 @@ Function Get-Artisan(
         { $_ -like "Alchemy" -or $_.Contains("Alchemy") } {
             $Artisan = "Alchemy"
         }
-        { $_ -like "Animal Husbrandry" -or $_ -like "Husbrandry" -or $_.Contains("Animal Husbandry") } {
-            $Artisan = "Animal Husbrandry"
+        { $_ -like "Animal Husbandry" -or $_ -like "Husbandry" -or $_.Contains("Animal Husbandry") } {
+            $Artisan = "Animal Husbandry"
         }
         { $_ -like "Cooking" -or $_ -like "Cook" -or $_.Contains("Cooking") } {
             $Artisan = "Cooking"
@@ -514,8 +514,9 @@ Legend
 📜 -> Higher level identifier for feature changes
 ❌ -> In-progress feature will be fixed in later release
 
-v1.2.0 - Sept 11th, 2024
+v1.2.0 - Sept 14th, 2024
 ✅ Added new filter "RP" to filter for a BTTC members "RP Priority"
+🔥 Fixed "Animal Husbandry" misspelling
 
 v1.1.0 - Sept 8th, 2024
 ✅ Able to filter for multiple Archetype(s), Branch(es), Artisan(s) and/or Timezone(s) parameter(s) at the same time, this constitues or'ing NOT and'ing

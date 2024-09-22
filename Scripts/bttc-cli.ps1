@@ -1,4 +1,4 @@
-$VERSION = "v1.2.0"
+$VERSION = "v1.3.0"
 
 Function bttc()
 {
@@ -19,7 +19,10 @@ Function bttc()
         [System.Collections.Generic.List[string]]$Timezone,
 
         [Parameter(Mandatory=$false)]
-        [System.Collections.Generic.List[string]]$RP
+        [System.Collections.Generic.List[string]]$RP,
+
+        [Parameter(Mandatory=$false)]
+        [System.Collections.Generic.List[string]]$Name
     )
 
     # Constants
@@ -175,6 +178,27 @@ Function bttc()
             else {
                 $ResponseList[0] | Select-Object -Property * -ExcludeProperty Timezone | Sort-Object -Property "Discord Name" -Unique | Format-Table -AutoSize
             }
+        }
+        {$_ -in "member", "m"} { 
+            if ([string]::IsNullOrEmpty($Name)) {
+                Write-Error "`"Name`" variable can not be empty, Try Again!"
+                break
+            }
+
+            $WHERE_QUERY = "WHERE%20(A%20contains%20'$Name')%20OR%20(B%20contains%20'$Name')"
+
+            Invoke-WebRequest -Uri "$($URL)&sheet='$GENERIC_SHEET'&range=A$($START_INDEX):H$($END_INDEX)&tq=SELECT%20*%20$WHERE_QUERY" | ConvertFrom-Csv -Header "Discord Name", "Character Name", "Branch", "Node", "Race", "Timezone", "RP Priority", "Access Level" | Format-Table -AutoSize
+
+            $ArtisanResponse = Invoke-WebRequest -Uri "$($URL)&sheet=$ARTISAN_SHEET&range=A$($START_INDEX):G$($END_INDEX)&tq=SELECT%20C%2CD%2CE%2CF%2CG%20$WHERE_QUERY" | ConvertFrom-Csv -Header "Grandmaster 1", "Grandmaster 2", "Master", "Journeyman", "Apprentice"
+            $ArtisanResponse[0]."Grandmaster 1" = Get-Artisan($ArtisanResponse[0]."Grandmaster 1")
+            $ArtisanResponse[0]."Grandmaster 2" = Get-Artisan($ArtisanResponse[0]."Grandmaster 2")
+            $ArtisanResponse[0]."Master" = Get-Artisan($ArtisanResponse[0]."Master")
+            $ArtisanResponse[0]."Journeyman" = Get-Artisan($ArtisanResponse[0]."Journeyman")
+            $ArtisanResponse[0]."Apprentice" = Get-Artisan($ArtisanResponse[0]."Apprentice")
+            $ArtisanResponse | Format-Table -AutoSize
+
+            Invoke-WebRequest -Uri "$($URL)&sheet=$ARCHETYPE_SHEET&range=A$($START_INDEX):G$($END_INDEX)&tq=SELECT%20C%2CD%2CE%2CF%2CG%20$WHERE_QUERY" | ConvertFrom-Csv -Header "Primary", "Secondary", "Class", "Alternate Secondary", "Alternate Class" | Format-Table -AutoSize
+
         }
         {$_ -in "help", "h"} { 
             Get-BTTC-Info
@@ -514,6 +538,10 @@ Legend
 📜 -> Higher level identifier for feature changes
 ❌ -> In-progress feature will be fixed in later release
 
+v1.3.0 - 
+✅ Added new command ["member", "m"] to get information for a specific user
+✅ Added new parameter "Name" for the new member command
+
 v1.2.0 - Sept 14th, 2024
 ✅ Added new filter "RP" to filter for a BTTC members "RP Priority"
 🔥 Fixed "Animal Husbandry" misspelling
@@ -572,6 +600,7 @@ Function Get-BTTC-Info {
     Write-Host "    [`"sheet`"] - Opens the BTTC google sheet"
     Write-Host "    [`"v`", `"version`"] - Displays the current CLI version"
     Write-Host "    [`"cl`", `"changelog`"] - Print the changelog for the CLI"
+    Write-Host "    [`"m`", `"member`"] - Get all of the info/data for a specific BTTC member"
     ""
     Write-Host "PARAMETERS"
     Write-Host "    -Branch <String[]> (Optional) [Not CaseSensitive]"
@@ -588,5 +617,8 @@ Function Get-BTTC-Info {
     ""
     Write-Host "    -RP <String[]> (Optional) [Not CaseSensitive]"
     Write-Host "        Specifies the BTTC `"RP Priority`""
+    ""
+    Write-Host "    -Name <String> (Optional) [CaseSensitive]"
+    Write-Host "        Specifies the BTTC member name"
     ""
 }

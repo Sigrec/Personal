@@ -538,7 +538,7 @@ Legend
 📜 -> Higher level identifier for feature changes
 ❌ -> In-progress feature will be fixed in later release
 
-v1.3.0 - 
+v1.3.0 - Sept 22nd, 2024
 ✅ Added new command ["member", "m"] to get information for a specific user
 ✅ Added new parameter "Name" for the new member command
 

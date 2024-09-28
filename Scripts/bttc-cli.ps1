@@ -1,4 +1,4 @@
-$VERSION = "v1.3.0"
+$VERSION = "v1.3.1"
 
 Function bttc()
 {
@@ -369,17 +369,20 @@ Function Get-Timezone(
 ) {
     for ($i = 0; $i -lt $Timezone.Count; $i++) {
         Switch($Timezone[$i]) {
-            { $_ -like "PST" } {
+            { $_ -like "PST" -or $_ -like "Pacific" } {
                 $Timezone[$i] = "PST"
             }
-            { $_ -like "CST" } {
+            { $_ -like "CST" -or $_ -like "Central" } {
                 $Timezone[$i] = "CST"
             }
-            { $_ -like "MST" } {
+            { $_ -like "MST" -or $_ -like "Mountain" } {
                 $Timezone[$i] = "MST"
             }
-            { $_ -like "EST" } {
+            { $_ -like "EST" -or $_ -like "Eastern" } {
                 $Timezone[$i] = "EST"
+            }
+            { $_ -like "AST" -or $_ -like "Atlantic" } {
+                $Timezone[$i] = "AST"
             }
             { $_ -like "European" -or $_ -like "Euro" } {
                 $Timezone[$i] = "European"
@@ -538,20 +541,6 @@ Legend
 📜 -> Higher level identifier for feature changes
 ❌ -> In-progress feature will be fixed in later release
 
-v1.3.0 - Sept 22nd, 2024
-✅ Added new command ["member", "m"] to get information for a specific user
-✅ Added new parameter "Name" for the new member command
-
-v1.2.0 - Sept 14th, 2024
-✅ Added new filter "RP" to filter for a BTTC members "RP Priority"
-🔥 Fixed "Animal Husbandry" misspelling
-
-v1.1.0 - Sept 8th, 2024
-✅ Able to filter for multiple Archetype(s), Branch(es), Artisan(s) and/or Timezone(s) parameter(s) at the same time, this constitues or'ing NOT and'ing
-🔥 Fixed help command text
-🔥 Fixed issue where "Cook" alias for Artisan would get "Farming" instead of "Cooking"
-🔥 Fixed issue where "Farm" alias for Artisan would get "Cooking" instead of "Farming"
-
 v1.0.2 - Sept 7th, 2024
 ✅ Added new command ["v", "version"] to print the CLI version
 ✅ Added new command ["sheet"] to open the google sheet in your browser
@@ -576,6 +565,28 @@ v1.0.2 - Sept 7th, 2024
 - ✅ "Stone" for "Stonemasonary"
 - ✅ "Cook" for "Cooking"
 - ✅ "Farm" for "Farming"
+
+v1.1.0 - Sept 8th, 2024
+✅ Able to filter for multiple Archetype(s), Branch(es), Artisan(s) and/or Timezone(s) parameter(s) at the same time, this constitues or'ing NOT and'ing
+🔥 Fixed help command text
+🔥 Fixed issue where "Cook" alias for Artisan would get "Farming" instead of "Cooking"
+🔥 Fixed issue where "Farm" alias for Artisan would get "Cooking" instead of "Farming"
+
+v1.2.0 - Sept 14th, 2024
+✅ Added new filter "RP" to filter for a BTTC members "RP Priority"
+🔥 Fixed "Animal Husbandry" misspelling
+
+v1.3.0 - Sept 22nd, 2024
+✅ Added new command ["member", "m"] to get information for a specific user
+✅ Added new parameter "Name" for the new member command
+
+v1.3.1 - Spet 28th, 2024
+📜 Timezone Param Updates
+- ✅ New timezone "AST" added with alias "Atlantic"
+- ✅ New alias for "EST", "Eastern" added
+- ✅ New alias for "PST", "Pacific" added
+- ✅ New alias for "CST", "Central" added
+- ✅ New alias for "MST", "Mountain" added
 '@
 }
 

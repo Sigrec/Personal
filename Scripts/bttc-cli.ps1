@@ -489,8 +489,8 @@ Function Get-Artisan(
         { $_ -like "Metalworking" -or $_ -like "Metal" -or $_.Contains("Metalworking") } {
             $Artisan = "Metalworking"
         }
-        { $_ -like "Stonemasonary" -or $_ -like "Stone" -or $_.Contains("Stonemasonary") } {
-            $Artisan = "Stonemasonary"
+        { $_ -like "Stonemasonry" -or $_ -like "Stone" -or $_.Contains("Stonemasonry") } {
+            $Artisan = "Stonemasonry"
         }
         { $_ -like "Tanning" -or $_ -like "Tan" -or $_.Contains("Tanning") } {
             $Artisan = "Tanning"
@@ -581,6 +581,7 @@ v1.3.0 - Sept 22nd, 2024
 ✅ Added new parameter "Name" for the new member command
 
 v1.3.1 - Spet 28th, 2024
+🔥 Fixed Stonemasonry spelling issue
 📜 Timezone Param Updates
 - ✅ New timezone "AST" added with alias "Atlantic"
 - ✅ New alias for "EST", "Eastern" added

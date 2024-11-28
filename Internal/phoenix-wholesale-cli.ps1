@@ -1,4 +1,4 @@
-[string]$VERSION = "1.0.0"
+[string]$VERSION = "1.0.1"
 
 function ptcg()
 {
@@ -481,7 +481,7 @@ function ptcg()
                 Write-Error "No product found for `"$IP`" at Distro #$Distro"
                 return
             }
-            $Response | Out-GridView -Title "$IP Product"
+            $Response | Out-GridView -Title "Product"
         }
         {$_ -in "sheets"} {
             Start-Process "https://docs.google.com/spreadsheets/d/1fWKRk_1i69rFE2ytxEmiAlHqYrPXVmhXSbG3fgGsl_I/edit?gid=1962881622#gid=1962881622"

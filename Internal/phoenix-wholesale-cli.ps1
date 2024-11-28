@@ -1,5 +1,6 @@
 [string]$VERSION = "1.0.0"
 
+# TODO - Add new param to search for a specific order #
 function ptcg()
 {
     param(
@@ -15,13 +16,14 @@ function ptcg()
         [string]$IP,
         [Parameter(Mandatory=$false)]
         [Alias("d")]
-        [ValidateSet(1, 2, 3, 4)]
+        [ValidateSet(1, 2, 3, 4, 5)]
         [UInt16]$distro,
         [Parameter(Mandatory=$false)]
         [string]$lang="English"
     )
     [string]$MASTER_TRACKING_SHEET_URL = "https://docs.google.com/spreadsheets/d/1fWKRk_1i69rFE2ytxEmiAlHqYrPXVmhXSbG3fgGsl_I/export?format=csv"
 
+    # TODO - Add new distro #5 to product command and finish cleaning it up
     [string]$Command = $Command.ToLower()
     Switch($Command) {
         {$_ -in "orders", "o"} {
@@ -65,18 +67,15 @@ function ptcg()
 
             if (![string]::IsNullOrEmpty($Name) -and ($Status -notmatch "HIDE")) {
                 # Calculate costs
-                $totalCost = $Response | ForEach-Object {
+                $totalCost = [Math]::Round($($Response | ForEach-Object {
                     [decimal]($_."Total Cost" -replace "[$]", "")
-                } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-                $totalCost = [Math]::Round($totalCost, 2)
+                } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
 
-                $shippingCost = $Response | ForEach-Object {
+                $shippingCost = [Math]::Round($($Response | ForEach-Object {
                     [decimal]($_."Shipping Cost" -replace "[$]", "")
-                } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-                $shippingCost = [Math]::Round($shippingCost, 2)
+                } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
 
-                $aggregateCost = $totalCost + $shippingCost
-                $aggregateCost = [Math]::Round($aggregateCost, 2)
+                $aggregateCost = [Math]::Round($totalCost + $shippingCost, 2)
 
                 Write-Output "Total Cost: `$${totalCost}"
                 Write-Output "Shipping Cost: `$${shippingCost}"

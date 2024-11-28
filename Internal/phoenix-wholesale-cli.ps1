@@ -9,6 +9,7 @@ function ptcg()
         [Parameter(Mandatory=$false)]
         [string]$Name,
         [Parameter(Mandatory=$false)]
+        [ValidateSet("PLACED", "ALLOCATING", "INVOICING", "PENDING PAYMENT", "PAID", "SHIPPING", "SHIPPED")]
         [string]$Status,
         [Parameter(Mandatory=$false)]
         [string]$Product,
@@ -57,7 +58,10 @@ function ptcg()
                 $Response = $Response | Where-Object { $_."Name" -match $Name }
             }
             if (![string]::IsNullOrEmpty($Product)) {
-                $Response = $Response | Where-Object { $_."Product Requested" -match $product }
+                $Response = $Response | Where-Object { $_."Product Requested" -match $Product }
+            }
+            if ((![string]::IsNullOrEmpty($Status)) -and ($Status -notmatch "HIDE")) {
+                $Response = $Response | Where-Object { $_."Status" -match $Status }
             }
 
             if (-not $Response -or $Response.Count -eq 0) {

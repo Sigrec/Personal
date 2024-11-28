@@ -10,7 +10,7 @@ function ptcg()
         [string]$Name,
         [Parameter(Mandatory=$false)]
         [Alias("s")]
-        [ValidateSet("PLACED", "ALLOCATING", "INVOICING", "PENDING PAYMENT", "PAID", "SHIPPING", "SHIPPED")]
+        [ValidateSet("HIDE", "PLACED", "ALLOCATING", "INVOICING", "PENDING PAYMENT", "PAID", "SHIPPING", "SHIPPED")]
         [string]$Status,
         [Parameter(Mandatory=$false)]
         [Alias("p")]
@@ -41,25 +41,25 @@ function ptcg()
             [UInt64]$MASTER_TRACKING_SHEET_COMPLETE_GID = 2024850616
             [string]$GRID_VIEW_TITLE = "Order Info"
 
+            $allResponses = @()
             if ($Status -match "HIDE") {
                 [UInt64]$CANCELLED_TRACKING_SHEET_COMPLETE_GID = 1639309719
-                $Response = Invoke-WebRequest -Uri "$($MASTER_TRACKING_SHEET_URL)&gid=$($CANCELLED_TRACKING_SHEET_COMPLETE_GID )" | ConvertFrom-Csv
+                $allResponses += "$($MASTER_TRACKING_SHEET_URL)&gid=$($CANCELLED_TRACKING_SHEET_COMPLETE_GID )"
             }
-            else {
-                # Fetch URLs in parallel and combine results
-                $allResponses = @(
-                    "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_GID)",
-                    "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_PREORDER_GID)",
-                    "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_COMPLETE_GID)"
-                ) | ForEach-Object -Parallel {
-                    Write-Debug "Request: $($_)"
-                    $response = Invoke-WebRequest -Uri $_
-                    $response.Content | ConvertFrom-Csv
-                } -ThrottleLimit 3
 
-                # Combine all data into a single array
-                $Response = $allResponses + @()
-            }
+            $allResponses += @(
+                "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_GID)",
+                "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_PREORDER_GID)",
+                "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_COMPLETE_GID)"
+            )
+            $allResponses = $allResponses | ForEach-Object -Parallel {
+                Write-Debug "Request: $($_)"
+                $response = Invoke-WebRequest -Uri $_
+                $response.Content | ConvertFrom-Csv
+            } -ThrottleLimit 3
+
+            # Combine all data into a single array
+            $Response = $allResponses + @()
 
             # Filter contents of the array
             if (($null -ne $RowNum) -and ($RowNum -ne 0)) {

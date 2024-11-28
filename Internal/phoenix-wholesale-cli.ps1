@@ -17,7 +17,7 @@ function ptcg()
         [Alias("p")]
         [string]$Product,
         [Parameter(Mandatory=$false)]
-        [Alias("ip")]
+        [Alias("i")]
         [string]$IP,
         [Parameter(Mandatory=$false)]
         [Alias("d")]

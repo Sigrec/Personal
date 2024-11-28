@@ -1,6 +1,5 @@
 [string]$VERSION = "1.0.0"
 
-# TODO - Add new param to search for a specific order num
 function ptcg()
 {
     param(
@@ -22,10 +21,14 @@ function ptcg()
         [Parameter(Mandatory=$false)]
         [Alias("d")]
         [ValidateSet(1, 2, 3, 4, 5)]
-        [UInt16]$distro,
+        [UInt16]$Distro,
         [Parameter(Mandatory=$false)]
         [Alias("l")]
-        [string]$lang="English"
+        [ValidateSet("English")]
+        [string]$Lang="English",
+        [Parameter(Mandatory=$false)]
+        [Alias("rn")]
+        [UInt64]$RowNum = 0
     )
     [string]$MASTER_TRACKING_SHEET_URL = "https://docs.google.com/spreadsheets/d/1fWKRk_1i69rFE2ytxEmiAlHqYrPXVmhXSbG3fgGsl_I/export?format=csv"
 
@@ -59,14 +62,19 @@ function ptcg()
             }
 
             # Filter contents of the array
-            if (![string]::IsNullOrEmpty($Name)) {
-                $Response = $Response | Where-Object { $_."Name" -match $Name }
+            if (($null -ne $RowNum) -and ($RowNum -ne 0)) {
+                $Response = $Response | Where-Object { $_."Row Number" -eq $RowNum }
             }
-            if (![string]::IsNullOrEmpty($Product)) {
-                $Response = $Response | Where-Object { $_."Product Requested" -match $Product }
-            }
-            if ((![string]::IsNullOrEmpty($Status)) -and ($Status -notmatch "HIDE")) {
-                $Response = $Response | Where-Object { $_."Status" -match $Status }
+            else {
+                if (-not [string]::IsNullOrWhiteSpace($Name)) {
+                    $Response = $Response | Where-Object { $_."Name" -match $Name }
+                }
+                if (-not [string]::IsNullOrWhiteSpace($Product)) {
+                    $Response = $Response | Where-Object { $_."Product Requested" -match $Product }
+                }
+                if ((-not [string]::IsNullOrWhiteSpace($Status)) -and ($Status -notmatch "HIDE")) {
+                    $Response = $Response | Where-Object { $_."Status" -match $Status }
+                }
             }
 
             if (-not $Response -or $Response.Count -eq 0) {
@@ -74,7 +82,7 @@ function ptcg()
                 return
             }
 
-            if (![string]::IsNullOrEmpty($Name) -and ($Status -notmatch "HIDE")) {
+            if (-not [string]::IsNullOrWhiteSpace($Name) -and ($Status -notmatch "HIDE")) {
                 # Calculate costs
                 $totalCost = [Math]::Round($($Response | ForEach-Object {
                     [decimal]($_."Total Cost" -replace "[$]", "")
@@ -100,8 +108,8 @@ function ptcg()
             Write-Debug "Request: $($MASTER_TRACKING_SHEET_URL)$($QUERY)"
             $Response = Invoke-WebRequest -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv
             
-            if (![string]::IsNullOrEmpty($Name)) {
-              $Response = $Response | Where-Object { $_."User Name" -match $Name }
+            if (-not [string]::IsNullOrWhiteSpace($Name)) {
+              $Response = $Response | Where-Object { [UInt64]$_."User Name" -match $Name }
             }
 
             if (-not $Response -or $Response.Count -eq 0) {
@@ -115,27 +123,47 @@ function ptcg()
             }
         }
         {$_ -in "payments", "pay"} {
-            if ([string]::IsNullOrEmpty($Name)) {
-                Write-Error "'Name' param cannot be empty!"
-                break
-            } 
-
             $WarningPreference = "SilentlyContinue"
             [UInt64]$PAYMENTS_SHEET_GID = 2061286159
             [string]$QUERY = "&gid=$($PAYMENTS_SHEET_GID)"
             [string]$GRID_VIEW_TITLE = "Payments Info"
 
             Write-Debug "Request: $($MASTER_TRACKING_SHEET_URL)$($QUERY)"
-            $Response = Invoke-WebRequest -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv | Where-Object { $_."Name" -match $Name }
+            $Response = Invoke-WebRequest -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv
 
-            if (-not $Response -or $Response.Count -eq 0) {
-                Write-Host "No payments found for `"$($Name)`""
+            if (($null -ne $RowNum) -and ($RowNum -ne 0)) {
+                $Response = $Response | Where-Object { $_."Row Number" -eq $RowNum }
+                if (-not $Response -or $Response.Count -eq 0) {
+                    Write-Host "No payments found for row number $RowNum"
+                    return
+                }
             }
-            else {
-                $Response | Select-Object -Property ( 
-                    $Response[0].PSObject.Properties.Name | Where-Object { $_ -notmatch "People with payment 1 week overdue|^H\d+$" }
-                ) | Out-GridView -Title $GRID_VIEW_TITLE
+            elseif (-not [string]::IsNullOrWhiteSpace($Name)) {
+                $Response = $Response | Where-Object { $_."Name" -match $Name }
+                if (-not $Response -or $Response.Count -eq 0) {
+                    Write-Host "No payments found for `"$($Name)`""
+                    return
+                }
+
+                # Calculate costs
+                $totalCost = [Math]::Round($($Response | ForEach-Object {
+                    [decimal]($_."Total Cost" -replace "[$]", "")
+                } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
+
+                $shippingCost = [Math]::Round($($Response | ForEach-Object {
+                    [decimal]($_."Shipping Cost" -replace "[$]", "")
+                } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
+
+                $aggregateCost = [Math]::Round($totalCost + $shippingCost, 2)
+
+                Write-Output "Total Cost: `$${totalCost}"
+                Write-Output "Shipping Cost: `$${shippingCost}"
+                Write-Output "Aggregate Cost: `$${aggregateCost}"
             }
+
+            $Response | Select-Object -Property ( 
+                $Response[0].PSObject.Properties.Name | Where-Object { $_ -notmatch "People with payment 1 week overdue|^H\d+$" }
+            ) | Out-GridView -Title $GRID_VIEW_TITLE
         }
         {$_ -in "overdue", "due"} {
             $WarningPreference = "SilentlyContinue"
@@ -154,17 +182,16 @@ function ptcg()
             [Boolean]$isPokemon = $false
             [char]$START_COLUMN
             [char]$END_COLUMN
-
+            $HEADERS = @("Product Name", "Price", "Status", "Allocation Due", "Street Date")
             switch($IP) {
-                { $_ -like "Pokemon" -or $_ -like "Pokémon" -or $_ -like "Poke" } {
-                    # TODOD - Finish pokemon
+                { $_ -match "Pokemon" -or $_ -match "Pokémon" -or $_ -match "Poke" } {
                     $FULL_IP = "Pokémon"
                     $isPokemon = $true
                     $SHEET_URL = "https://docs.google.com/spreadsheets/d/1AnnzLYz1ktCLm0-Mt5o-6p4T8AqE0r2gewv-osqrK0A/export?format=csv"
                     Write-Debug "Getting $FULL_IP Product"
-                    if($lang -eq "English") {
+                    if($Lang -eq "English") {
                         $SHEET_GID = 0
-                        switch($distro) {
+                        switch($Distro) {
                             { $_ -eq 1 } {
                                 $START_COLUMN = 'F'
                                 $END_COLUMN = 'J'
@@ -181,22 +208,23 @@ function ptcg()
                                 $START_COLUMN = 'W'
                                 $END_COLUMN = 'Z'
                             }
+                            { $_ -eq 5 } {
+                                $START_COLUMN = 'AB'
+                                $END_COLUMN = 'AE'
+                            }
                             default {
-                                Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
+                                Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
                                 return
                             }
                         }
-                        $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
-                    }
-                    else {
-                        $SHEET_GID = 2025586520
+                        $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                     }
                 }
-                { $_ -like "Magic The Gathering" -or $_ -like "MTG" -or $_ -like "Magic"  } {
-                    FULL_IP = "Magic The Gathering"
+                { $_ -match "Magic The Gathering" -or $_ -match "MTG" -or $_ -match "Magic"  } {
+                    $FULL_IP = "Magic The Gathering"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 419743007
-                    switch($distro) {
+                    switch($Distro) {
                         { $_ -eq 1 } {
                             $START_COLUMN = 'A'
                             $END_COLUMN = 'E'
@@ -209,110 +237,118 @@ function ptcg()
                             $START_COLUMN = 'K'
                             $END_COLUMN = 'O'
                         }
-                        default {
-                            Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
-                            return
-                        }
-                    }
-                    $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
-                }
-                { $_ -like "Flesh & Blood" -or $_ -like "Flesh And Blood" -or $_ -like "FAB"} {
-                    $FULL_IP = "Flesh & Blood"
-                    Write-Debug "Getting $FULL_IP Product"
-                    $SHEET_GID = 1539072415
-                    switch($distro) {
-                        { $_ -eq 1 } {
-                            $START_COLUMN = 'A'
-                            $END_COLUMN = 'E'
-                        }
-                        { $_ -eq 3 } {
-                            $START_COLUMN = 'G'
-                            $END_COLUMN = 'K'
+                        { $_ -eq 5 } {
+                            $START_COLUMN = 'Q'
+                            $END_COLUMN = 'U'
                         }
                         default {
-                            Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
-                            return
-                        }
-                    }
-                    $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
-                }
-                { $_ -like "Grand Archive" -or $_ -like "GA"} {
-                    $FULL_IP = "Grand Archive"
-                    Write-Debug "Getting $FULL_IP Product"
-                    $SHEET_GID = 1217038948
-                    switch($distro) {
-                        { $_ -eq 1 } {
-                            $START_COLUMN = 'A'
-                            $END_COLUMN = 'E'
-                        }
-                        { $_ -eq 3 } {
-                            $START_COLUMN = 'G'
-                            $END_COLUMN = 'K'
-                        }
-                        default {
-                            Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
-                            return
-                        }
-                    }
-                    $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
-                }
-                { $_ -like "Lorcana" -or $_ -like "Lor"} {
-                    $FULL_IP = "Lorcana"
-                    Write-Debug "Getting $FULL_IP Product"
-                    $SHEET_GID = 613517122
-                    switch($distro) {
-                        { $_ -eq 1 } {
-                            $START_COLUMN = 'A'
-                            $END_COLUMN = 'E'
-                        }
-                        { $_ -eq 3 } {
-                            $START_COLUMN = 'G'
-                            $END_COLUMN = 'K'
-                        }
-                        default {
-                            Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
                             return
                         }
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -like "Sorcery" -or $_ -like "Sorc"} {
+                { $_ -match "Flesh & Blood" -or $_ -match "Flesh And Blood" -or $_ -match "FAB" } {
+                    $FULL_IP = "Flesh & Blood"
+                    Write-Debug "Getting $FULL_IP Product"
+                    $SHEET_GID = 1539072415
+                    switch($Distro) {
+                        { $_ -eq 1 } {
+                            $START_COLUMN = 'A'
+                            $END_COLUMN = 'E'
+                        }
+                        { $_ -eq 3 } {
+                            $START_COLUMN = 'G'
+                            $END_COLUMN = 'K'
+                        }
+                        default {
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
+                            return
+                        }
+                    }
+                    $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
+                }
+                { $_ -match "Grand Archive" -or $_ -match "GA" } {
+                    $FULL_IP = "Grand Archive"
+                    Write-Debug "Getting $FULL_IP Product"
+                    $SHEET_GID = 1217038948
+                    switch($Distro) {
+                        { $_ -eq 1 } {
+                            $START_COLUMN = 'A'
+                            $END_COLUMN = 'E'
+                        }
+                        { $_ -eq 3 } {
+                            $START_COLUMN = 'G'
+                            $END_COLUMN = 'K'
+                        }
+                        default {
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
+                            return
+                        }
+                    }
+                    $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
+                }
+                { $_ -match "Lorcana" -or $_ -match "Lor" } {
+                    $FULL_IP = "Lorcana"
+                    Write-Debug "Getting $FULL_IP Product"
+                    $SHEET_GID = 613517122
+                    switch($Distro) {
+                        { $_ -eq 1 } {
+                            $START_COLUMN = 'A'
+                            $END_COLUMN = 'E'
+                        }
+                        { $_ -eq 3 } {
+                            $START_COLUMN = 'G'
+                            $END_COLUMN = 'K'
+                        }
+                        default {
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
+                            return
+                        }
+                    }
+                    $SHEET_RANGE = "$($START_COLUMN)17:$($END_COLUMN)&tq=SELECT%20*"
+                }
+                { $_ -match "Sorcery" -or $_ -match "Sorc" } {
                     $FULL_IP = "Sorcery"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 80389347
-                    switch($distro) {
+                    switch($Distro) {
                         { $_ -eq 1 } {
                             $START_COLUMN = 'A'
                             $END_COLUMN = 'E'
                         }
+                        { $_ -eq 3 } {
+                            $START_COLUMN = 'G'
+                            $END_COLUMN = 'K'
+                        }
                         default {
-                            Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
                             return
                         }
                     }
-                    $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
+                    $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -like "Star Wars Unlimited" -or $_ -like "SWU" -or $_ -like "Star Wars"} {
+                { $_ -match "Star Wars Unlimited" -or $_ -match "SWU" -or $_ -match "Star Wars" } {
                     $FULL_IP = "Star Wars Unlimited"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 879393505
-                    switch($distro) {
+                    switch($Distro) {
                         { $_ -eq 1 } {
                             $START_COLUMN = 'A'
                             $END_COLUMN = 'E'
                         }
                         default {
-                            Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
                             return
                         }
                     }
-                    $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
+                    $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -like "Union Arena" -or $_ -like "UA"} {
+                { $_ -match "Union Arena" -or $_ -match "UA" } {
                     $FULL_IP = "Union Arena"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 24121953
-                    switch($distro) {
+                    switch($Distro) {
                         { $_ -eq 1 } {
                             $START_COLUMN = 'A'
                             $END_COLUMN = 'E'
@@ -321,18 +357,22 @@ function ptcg()
                             $START_COLUMN = 'G'
                             $END_COLUMN = 'K'
                         }
+                        { $_ -eq 5 } {
+                            $START_COLUMN = 'M'
+                            $END_COLUMN = 'Q'
+                        }
                         default {
-                            Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
                             return
                         }
                     }
-                    $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
+                    $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -like "Weiss Schwarz" -or $_ -like "WS" -or $_ -like "Weiss"} {
+                { $_ -match "Weiss Schwarz" -or $_ -match "WS" -or $_ -match "Weiss" } {
                     $FULL_IP = "Weiss Schwarz"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 1882644453
-                    switch($distro) {
+                    switch($Distro) {
                         { $_ -eq 1 } {
                             $START_COLUMN = 'A'
                             $END_COLUMN = 'E'
@@ -341,18 +381,22 @@ function ptcg()
                             $START_COLUMN = 'G'
                             $END_COLUMN = 'K'
                         }
+                        { $_ -eq 5 } {
+                            $START_COLUMN = 'M'
+                            $END_COLUMN = 'Q'
+                        }
                         default {
-                            Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
                             return
                         }
                     }
-                    $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
+                    $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -like "Yu-Gi-Oh" -or $_ -like "YuGiOh" -or $_ -like "YGO"} {
+                { $_ -match "Yu-Gi-Oh" -or $_ -match "YuGiOh" -or $_ -match "YGO" } {
                     $FULL_IP = "Yu-Gi-Oh"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 103569003
-                    switch($distro) {
+                    switch($Distro) {
                         { $_ -eq 1 } {
                             $START_COLUMN = 'A'
                             $END_COLUMN = 'E'
@@ -369,15 +413,38 @@ function ptcg()
                             $START_COLUMN = 'T'
                             $END_COLUMN = 'X'
                         }
+                        { $_ -eq 5 } {
+                            $START_COLUMN = 'Z'
+                            $END_COLUMN = 'AD'
+                        }   
                         default {
-                            Write-Error "Distro #$distro does not have `"$FULL_IP`" product"
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
                             return
                         }
                     }
-                    $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
+                    $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -like "Item Request" -or $_ -like "Request" -or $_ -like "IR"} {
+                { $_ -match "Bandai" -or $_ -match "Dragon Ball Super" -or $_ -match "DBS" -or $_ -match "Dragon Ball" -or $_ -match "Digimon" -or $_ -match "Digi" -or $_ -match "One Piece" -or $_ -match "OP" }  {
+                    $FULL_IP = "Bandai"
+                    Write-Debug "Getting $FULL_IP Product for Distro #$Distro"
+                    $SHEET_GID = 53171288
+                    switch($Distro) {
+                        { $_ -eq 5 } {
+                            $START_COLUMN = 'A'
+                            $END_COLUMN = 'E'
+                        }   
+                        default {
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
+                            return
+                        }
+                    }
+                    $SHEET_RANGE = "$($START_COLUMN)11:$($END_COLUMN)&tq=SELECT%20*"
+                }
+                { $_ -match "Item Request" -or $_ -match "Request" -or $_ -match "IR" } {
                     $SHEET_GID = 1689199249
+                }
+                { $_ -match "Supplies" -or $_ -match "Supply" } {
+                    $SHEET_GID = 1234938269
                 }
                 default {
                     Write-Error "`"$IP`" is not a valid IP"
@@ -385,18 +452,36 @@ function ptcg()
                 }
             }
 
-            if (!$isPokemon) {
-                $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv
+            if (@("Dragon Ball Super", "DBS", "Digimon", "One Piece", "OP") -match $IP) {
+                Write-Debug "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)"
+                Write-Debug "Filtering Bandai Product"
+                switch($IP) {
+                    { $_ -match "Dragon Ball Super" -or $_ -match "DBS" -or $_ -match "Dragon Ball"} {
+                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Dragon Ball Super" }
+                    }
+                    { $_ -match "Digimon" -or $_ -match "Digi" } {
+                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Digimon" }
+                    }
+                    { $_ -match "One Piece" -or $_ -match "OP" } {
+                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "One Piece" }
+                    }
+                }
+            }
+            elseif (!$isPokemon) {
+                Write-Debug "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)"
+                $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS
             }
             else {
-                $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&range=$($SHEET_RANGE)" | ConvertFrom-Csv
+                Write-Debug "$($SHEET_URL)&range=$($SHEET_RANGE)"
+                $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS
             }
 
+            $Response = $Response | Where-Object { ![string]::IsNullOrWhiteSpace($_."Product Name") }
             if (-not $Response -or $Response.Count -eq 0) {
-                Write-Error "No product found for `"$IP`" at Distro #$distro"
+                Write-Error "No product found for `"$IP`" at Distro #$Distro"
                 return
             }
-            $Response | Where-Object { ![string]::IsNullOrWhiteSpace($_."Name") } | Out-GridView -Title "$IP Product"
+            $Response | Out-GridView -Title "$IP Product"
         }
         {$_ -in "sheets"} {
             Start-Process "https://docs.google.com/spreadsheets/d/1fWKRk_1i69rFE2ytxEmiAlHqYrPXVmhXSbG3fgGsl_I/edit?gid=1962881622#gid=1962881622"
@@ -421,20 +506,56 @@ function ptcg()
             Write-Host "    $VERSION"
             ""
             Write-Host "EXAMPLES"
-            Write-Host "    ptcg user -Name `"Eli`" (Prints all orders from the spreadsheet where the name contains `"Eli`")"
+            Write-Host "    ptcg o -Name `"Eli`" (Prints all orders from the spreadsheet where the name contains `"Eli`")"
             ""
             Write-Host "SYNTAX (Order doesn't mater)"
             Write-Host "    ptcg <Command> [-Parameter(s)] <Value(s)>"
             ""
             Write-Host "COMMANDS"
-            Write-Host "    [`"orders`", `"o`"] - Lists the Master Tracking order info for a member"
-            Write-Host "    [`"ranking`", `"rank`", `"r`"] - Get current rankings for a specifc member"
-            Write-Host "    [`"payments`", `"p`"] - Get payments info for a specific member"
+            Write-Host "    [`"orders`", `"o`"] - Get Master Tracking order info"
+            Write-Host "        -Name <String> [Optional] [Alias: n]"
+            Write-Host "            Specifies the discord member name to filter orders."
+            Write-Host "        -Status <String> [Optional] [Alias: s]"
+            Write-Host "            Filters orders based on their status. Valid values are:"
+            Write-Host "            PLACED, ALLOCATING, INVOICING, PENDING PAYMENT, PAID, SHIPPING, SHIPPED"
+            Write-Host "        -Product <String> [Optional] [Alias: p]"
+            Write-Host "            Filters orders based on the product requested."
+            Write-Host "        -RowNum <UInt64> [Optional] [Alias: rn]"
+            Write-Host "            Filters orders by the row number."
+            Write-Host ""
+
+            Write-Host "    [`"ranking`", `"rank`", `"r`"] - Get rankings"
+            Write-Host "        -Name <String> [Optional] [Alias: n]"
+            Write-Host "            Specifies the discord member name to filter rankings."
+            Write-Host ""
+
+            Write-Host "    [`"payments`", `"pay`"] - Get payments info"
+            Write-Host "        -Name <String> [Optional] [Alias: n]"
+            Write-Host "            Specifies the discord member name to filter payments."
+            Write-Host "        -RowNum <UInt64> [Optional] [Alias: rn]"
+            Write-Host "            Filters payments by the row number."
+            Write-Host ""
+
+            Write-Host "    [`"overdue`", `"due`"] - Get list of members with payment 1 week overdue"
+            Write-Host ""
+
+            Write-Host "    [`"product`", `"p`"] - Get product information for a specific IP and distro"
+            Write-Host "        -IP <String> [Optional] [Alias: i]"
+            Write-Host "            Filters the product based on its intellectual property (IP)."
+            Write-Host "        -Distro <UInt16> [Optional] [Alias: d]"
+            Write-Host "            Filters the product based on the distributor. Valid values are 1, 2, 3, 4, 5."
+            Write-Host ""
+
+            Write-Host "    [`"sheets`"] - Open the wholesale program google sheets"
+            Write-Host ""
+
+            Write-Host "    [`"faq`"] - Open the wholesale program faq google doc"
+            Write-Host ""
+
+            Write-Host "    [`"distro`"] - Open all of the distro websites in order"
+            Write-Host ""
+
             Write-Host "    [`"help`", `"h`"] - Displays information about the CLI"
-            ""
-            Write-Host "PARAMETERS"
-            Write-Host "    -Name <String> [CaseSensitive]"
-            Write-Host "        Specifies the discord member name in the sheet"
             ""
         }
     }

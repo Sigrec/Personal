@@ -7,19 +7,24 @@ function ptcg()
         [Parameter(Mandatory=$true, Position=0)]
         [string]$Command,
         [Parameter(Mandatory=$false)]
+        [Alias("n")]
         [string]$Name,
         [Parameter(Mandatory=$false)]
+        [Alias("s")]
         [ValidateSet("PLACED", "ALLOCATING", "INVOICING", "PENDING PAYMENT", "PAID", "SHIPPING", "SHIPPED")]
         [string]$Status,
         [Parameter(Mandatory=$false)]
+        [Alias("p")]
         [string]$Product,
         [Parameter(Mandatory=$false)]
+        [Alias("ip")]
         [string]$IP,
         [Parameter(Mandatory=$false)]
         [Alias("d")]
         [ValidateSet(1, 2, 3, 4, 5)]
         [UInt16]$distro,
         [Parameter(Mandatory=$false)]
+        [Alias("l")]
         [string]$lang="English"
     )
     [string]$MASTER_TRACKING_SHEET_URL = "https://docs.google.com/spreadsheets/d/1fWKRk_1i69rFE2ytxEmiAlHqYrPXVmhXSbG3fgGsl_I/export?format=csv"

@@ -1,6 +1,6 @@
 [string]$VERSION = "1.0.0"
 
-# TODO - Add new param to search for a specific order #
+# TODO - Add new param to search for a specific order num
 function ptcg()
 {
     param(

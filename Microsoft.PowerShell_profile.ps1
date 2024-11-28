@@ -7,7 +7,9 @@ Import-Module posh-git
 Import-Module PSReadLine
 
 # Import local scripts
-. "$(Split-Path -Path $PROFILE)\Scripts\bttc-cli.ps1"
+Get-ChildItem -Path "$(Split-Path -Path $PROFILE)\Scripts\Internal" -Filter *.ps1 -Recurse | ForEach-Object { 
+    . $_.FullName
+}
 
 # Enable Read line
 if ($host.Name -eq 'ConsoleHost')

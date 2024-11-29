@@ -10,7 +10,7 @@ function ptcg()
         [string]$Name,
         [Parameter(Mandatory=$false)]
         [Alias("s")]
-        [ValidateSet("HIDE", "PLACED", "ALLOCATING", "INVOICING", "PENDING PAYMENT", "PAID", "SHIPPING", "SHIPPED")]
+        [ValidateSet("HIDE", "PLACED", "ALLOCATING", "INVOICING", "PENDING PAYMENT", "PAID", "SHIPPING", "SHIPPED", "COMPLETE")]
         [string]$Status,
         [Parameter(Mandatory=$false)]
         [Alias("p")]

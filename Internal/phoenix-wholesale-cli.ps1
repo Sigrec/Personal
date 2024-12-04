@@ -1,4 +1,4 @@
-[string]$VERSION = "1.0.1"
+[string]$VERSION = "1.0.2"
 
 function ptcg()
 {
@@ -21,7 +21,7 @@ function ptcg()
         [Parameter(Mandatory=$false)]
         [Alias("d")]
         [ValidateSet(1, 2, 3, 4, 5)]
-        [UInt16]$Distro,
+        [UInt16]$Distro = 0,
         [Parameter(Mandatory=$false)]
         [Alias("l")]
         [ValidateSet("English")]
@@ -74,6 +74,9 @@ function ptcg()
                 }
                 if ((-not [string]::IsNullOrWhiteSpace($Status)) -and ($Status -notmatch "HIDE")) {
                     $Response = $Response | Where-Object { $_."Status" -match $Status }
+                }
+                if ($Distro -ne 0) {
+                    $Response = $Response | Where-Object { $_."Distro Number" -match $Distro }
                 }
             }
 
@@ -520,6 +523,8 @@ function ptcg()
             Write-Host "            PLACED, ALLOCATING, INVOICING, PENDING PAYMENT, PAID, SHIPPING, SHIPPED"
             Write-Host "        -Product <String> [Optional] [Alias: p]"
             Write-Host "            Filters orders based on the product requested."
+            Write-Host "        -Distro <UInt16> [Optional] [Alias: d]"
+            Write-Host "            Filters the product based on the distributor. Valid values are 1, 2, 3, 4, 5."
             Write-Host "        -RowNum <UInt64> [Optional] [Alias: rn]"
             Write-Host "            Filters orders by the row number."
             Write-Host ""

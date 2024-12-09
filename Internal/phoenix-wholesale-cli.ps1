@@ -1,4 +1,4 @@
-[string]$VERSION = "1.0.2"
+[string]$VERSION = "1.0.3"
 
 function ptcg()
 {
@@ -42,7 +42,7 @@ function ptcg()
             [string]$GRID_VIEW_TITLE = "Order Info"
 
             $allResponses = @()
-            if ($Status -match "HIDE") {
+            if (($Status -match "HIDE") -or (($null -ne $RowNum) -and ($RowNum -ne 0))) {
                 [UInt64]$CANCELLED_TRACKING_SHEET_COMPLETE_GID = 1639309719
                 $allResponses += "$($MASTER_TRACKING_SHEET_URL)&gid=$($CANCELLED_TRACKING_SHEET_COMPLETE_GID )"
             }

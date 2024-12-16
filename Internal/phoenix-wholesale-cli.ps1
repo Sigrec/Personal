@@ -1,4 +1,4 @@
-[string]$VERSION = "1.0.4"
+[string]$VERSION = "1.0.5"
 
 function ptcg()
 {
@@ -86,15 +86,27 @@ function ptcg()
             }
 
             # Calculate costs
-            if (-not [string]::IsNullOrWhiteSpace($Name)) {
+            if (-not [string]::IsNullOrWhiteSpace($Name) -and ($Status -notmatch "HIDE")) {
                 function Get-Spend {
                     param (
                         [string]$status="",
+                        [string]$distroAvailability="",
                         [string]$columnName = "Total Cost"
                     )
                     # Filter response based on status and calculate spend
                     if (-not [string]::IsNullOrWhiteSpace($status)) {
                         $filteredResponse = $Response | Where-Object { $_."Status" -eq $status }
+                        if ($filteredResponse) {
+                            return [Math]::Round(($filteredResponse | ForEach-Object {
+                                [decimal]($_.$columnName -replace "[$]", "")
+                            } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
+                        }
+                        else {
+                            return 0
+                        }
+                    }
+                    elseif (-not [string]::IsNullOrWhiteSpace($distroAvailability)) {
+                        $filteredResponse = $Response | Where-Object { $_."Distro Availability" -eq $distroAvailability }
                         if ($filteredResponse) {
                             return [Math]::Round(($filteredResponse | ForEach-Object {
                                 [decimal]($_.$columnName -replace "[$]", "")
@@ -128,6 +140,16 @@ function ptcg()
                     $spend = Get-Spend -status $status
                     Write-Output "$status Spend: `$${spend}"
                 }
+
+                $preOrderSpend = Get-Spend -distroAvailability "Pre-Order" -columnName "Total Cost"
+                $openOrderSpend = Get-Spend -distroAvailability "Open Order" -columnName "Total Cost"
+                $limitOrderSpend = Get-Spend -distroAvailability "Limit Order" -columnName "Total Cost"
+                $backOrderSpend = Get-Spend -distroAvailability "Back Order" -columnName "Total Cost"
+
+                Write-Output "`nOpen Order Spend: `$${openOrderSpend}"
+                Write-Output "Pre-Order Spend: `$${preOrderSpend}"
+                Write-Output "Limited Order Spend: `$${limitOrderSpend}"
+                Write-Output "Back Order Spend: `$${backOrderSpend}"
                 
                 $curShippingCost = Get-Spend -status "SHIPPED" -columnName "Shipping Cost"
                 $totalSpend = Get-Spend -columnName "Total Cost"

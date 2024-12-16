@@ -1,4 +1,4 @@
-[string]$VERSION = "1.0.3"
+[string]$VERSION = "1.0.4"
 
 function ptcg()
 {
@@ -85,19 +85,46 @@ function ptcg()
                 return
             }
 
-            if (-not [string]::IsNullOrWhiteSpace($Name) -and ($Status -notmatch "HIDE")) {
-                # Calculate costs
-                $totalCost = [Math]::Round($($Response | ForEach-Object {
-                    [decimal]($_."Total Cost" -replace "[$]", "")
-                } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
+            # Calculate costs
+            if (-not [string]::IsNullOrWhiteSpace($Name)) {
+                function Get-Spend {
+                    param (
+                        [string]$status,
+                        [string]$columnName = "Total Cost"
+                    )
+                    # Filter response based on status and calculate spend
+                    $filteredResponse = $Response | Where-Object { $_."Status" -eq $status }
+                    if ($filteredResponse) {
+                        return [Math]::Round(($filteredResponse | ForEach-Object {
+                            [decimal]($_.$columnName -replace "[$]", "")
+                        } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
+                    }
+                    return 0
+                }
+                
+                # Array of statuses to process
+                $statuses = @(
+                    "PLACED",
+                    "ALLOCATING",
+                    "INVOICING",
+                    "PENDING PAYMENT",
+                    "PAID",
+                    "SHIPPING",
+                    "SHIPPED",
+                    "COMPLETE"
+                )
+                
+                # Loop through statuses and calculate spend for each
+                foreach ($status in $statuses) {
+                    $spend = Get-Spend -status $status
+                    Write-Output "$status Spend: `$${spend}"
+                }
 
-                $shippingCost = [Math]::Round($($Response | ForEach-Object {
-                    [decimal]($_."Shipping Cost" -replace "[$]", "")
-                } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
+                $totalSpend = Get-Spend -status "" -columnName "Total Cost" # All entries
+                $shippingCost = Get-Spend -status "" -columnName "Shipping Cost"
+                $aggregateCost = [Math]::Round($totalSpend + $shippingCost, 2)
 
-                $aggregateCost = [Math]::Round($totalCost + $shippingCost, 2)
-
-                Write-Output "Total Cost: `$${totalCost}"
+                Write-Output "Total Spend: `$${totalSpend}"
                 Write-Output "Shipping Cost: `$${shippingCost}"
                 Write-Output "Aggregate Cost: `$${aggregateCost}"
             }

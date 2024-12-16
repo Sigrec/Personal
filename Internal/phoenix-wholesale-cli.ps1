@@ -89,7 +89,7 @@ function ptcg()
             if (-not [string]::IsNullOrWhiteSpace($Name)) {
                 function Get-Spend {
                     param (
-                        [string]$status,
+                        [string]$status="",
                         [string]$columnName = "Total Cost"
                     )
                     # Filter response based on status and calculate spend
@@ -128,13 +128,15 @@ function ptcg()
                     $spend = Get-Spend -status $status
                     Write-Output "$status Spend: `$${spend}"
                 }
-
-                $totalSpend = Get-Spend -status "" -columnName "Total Cost" # All entries
-                $shippingCost = Get-Spend -status "" -columnName "Shipping Cost"
+                
+                $curShippingCost = Get-Spend -status "SHIPPED" -columnName "Shipping Cost"
+                $totalSpend = Get-Spend -columnName "Total Cost"
+                $totalShippingCost = Get-Spend -columnName "Shipping Cost"
                 $aggregateCost = [Math]::Round($totalSpend + $shippingCost, 2)
 
+                Write-Output "`nCurrent Shipping Cost: `$${curShippingCost}"
                 Write-Output "Total Spend: `$${totalSpend}"
-                Write-Output "Shipping Cost: `$${shippingCost}"
+                Write-Output "Total Shipping Cost: `$${totalShippingCost}"
                 Write-Output "Aggregate Cost: `$${aggregateCost}"
             }
 

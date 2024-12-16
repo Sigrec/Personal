@@ -93,13 +93,22 @@ function ptcg()
                         [string]$columnName = "Total Cost"
                     )
                     # Filter response based on status and calculate spend
-                    $filteredResponse = $Response | Where-Object { $_."Status" -eq $status }
-                    if ($filteredResponse) {
-                        return [Math]::Round(($filteredResponse | ForEach-Object {
+                    if (-not [string]::IsNullOrWhiteSpace($status)) {
+                        $filteredResponse = $Response | Where-Object { $_."Status" -eq $status }
+                        if ($filteredResponse) {
+                            return [Math]::Round(($filteredResponse | ForEach-Object {
+                                [decimal]($_.$columnName -replace "[$]", "")
+                            } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
+                        }
+                        else {
+                            return 0
+                        }
+                    }
+                    else {
+                        return [Math]::Round(($Response | ForEach-Object {
                             [decimal]($_.$columnName -replace "[$]", "")
                         } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
                     }
-                    return 0
                 }
                 
                 # Array of statuses to process

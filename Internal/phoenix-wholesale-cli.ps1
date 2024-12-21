@@ -41,25 +41,37 @@ function ptcg()
             [UInt64]$MASTER_TRACKING_SHEET_COMPLETE_GID = 2024850616
             [string]$GRID_VIEW_TITLE = "Order Info"
 
+            # Initialize the array of URLs
             $allResponses = @()
+
+            # Conditionally add the CANCELLED tracking sheet URL
             if (($Status -match "HIDE") -or (($null -ne $RowNum) -and ($RowNum -ne 0))) {
                 [UInt64]$CANCELLED_TRACKING_SHEET_COMPLETE_GID = 1639309719
-                $allResponses += "$($MASTER_TRACKING_SHEET_URL)&gid=$($CANCELLED_TRACKING_SHEET_COMPLETE_GID )"
+                $allResponses += "$($MASTER_TRACKING_SHEET_URL)&gid=$($CANCELLED_TRACKING_SHEET_COMPLETE_GID)"
             }
 
+            # Add other necessary tracking sheet URLs
             $allResponses += @(
                 "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_GID)",
                 "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_PREORDER_GID)",
                 "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_COMPLETE_GID)"
             )
-            $allResponses = $allResponses | ForEach-Object -Parallel {
-                Write-Debug "Request: $($_)"
-                $response = Invoke-WebRequest -Uri $_
-                $response.Content | ConvertFrom-Csv
+
+            # Process URLs in parallel with throttle limit
+            $Response = $allResponses | ForEach-Object -Parallel {
+                Write-Debug "Request: $_"
+                try {
+                    $response = Invoke-WebRequest -Uri $_ -ErrorAction Stop
+                    Write-Debug $response
+                    return $response.Content | ConvertFrom-Csv
+                } catch {
+                    Write-Debug "Error fetching URL: $_, $_"
+                    return $null  # Return $null if the request fails
+                }
             } -ThrottleLimit 3
 
-            # Combine all data into a single array
-            $Response = $allResponses + @()
+            # Filter out null responses if there were any failed requests
+            $Response = $Response | Where-Object { $_ -ne $null }
 
             # Filter contents of the array
             if (($null -ne $RowNum) -and ($RowNum -ne 0)) {
@@ -87,79 +99,71 @@ function ptcg()
 
             # Calculate costs
             if (-not [string]::IsNullOrWhiteSpace($Name) -and ($Status -notmatch "HIDE")) {
-                function Get-Spend {
+                function Get-Amount {
                     param (
-                        [string]$status="",
-                        [string]$distroAvailability="",
+                        [string]$status = "",
+                        [string]$distroAvailability = "",
                         [string]$columnName = "Total Cost"
                     )
-                    # Filter response based on status and calculate spend
-                    if (-not [string]::IsNullOrWhiteSpace($status)) {
-                        $filteredResponse = $Response | Where-Object { $_."Status" -eq $status }
-                        if ($filteredResponse) {
-                            return [Math]::Round(($filteredResponse | ForEach-Object {
-                                [decimal]($_.$columnName -replace "[$]", "")
-                            } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
-                        }
-                        else {
+                
+                    # Helper function to calculate the rounded sum
+                    function Get-Sum($response, $columnName) {
+                        if ($response) {
+                            return [Math]::Round(
+                                ($response | ForEach-Object { 
+                                    [decimal]($_.$columnName -replace "[$]", "") 
+                                } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2
+                            )
+                        } else {
                             return 0
                         }
                     }
-                    elseif (-not [string]::IsNullOrWhiteSpace($distroAvailability)) {
-                        $filteredResponse = $Response | Where-Object { $_."Distro Availability" -eq $distroAvailability }
-                        if ($filteredResponse) {
-                            return [Math]::Round(($filteredResponse | ForEach-Object {
-                                [decimal]($_.$columnName -replace "[$]", "")
-                            } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
-                        }
-                        else {
-                            return 0
-                        }
+                
+                    # Determine the filtered response based on parameters
+                    $filteredResponse = if (-not [string]::IsNullOrWhiteSpace($status)) {
+                        $Response | Where-Object { $_."Status" -eq $status }
+                    } elseif (-not [string]::IsNullOrWhiteSpace($distroAvailability)) {
+                        $Response | Where-Object { $_."Distro Availability" -eq $distroAvailability }
+                    } else {
+                        $Response
                     }
-                    else {
-                        return [Math]::Round(($Response | ForEach-Object {
-                            [decimal]($_.$columnName -replace "[$]", "")
-                        } | Measure-Object -Sum | Select-Object -ExpandProperty Sum), 2)
-                    }
-                }
+                
+                    # Calculate and return the sum
+                    return Get-Sum $filteredResponse $columnName
+                }                
                 
                 # Array of statuses to process
-                $statuses = @(
-                    "PLACED",
-                    "ALLOCATING",
-                    "INVOICING",
-                    "PENDING PAYMENT",
-                    "PAID",
-                    "SHIPPING",
-                    "SHIPPED",
-                    "COMPLETE"
-                )
+                [string[]]$statuses = @("PLACED", "ALLOCATING", "INVOICING", "PENDING PAYMENT", "PAID", "SHIPPING", "SHIP PAY PENDING", "SHIPPED", "COMPLETE")
                 
                 # Loop through statuses and calculate spend for each
-                foreach ($status in $statuses) {
-                    $spend = Get-Spend -status $status
-                    Write-Output "$status Spend: `$${spend}"
-                }
+                $statuses | ForEach-Object {
+                    try {
+                        $spend = Get-Amount -status $_
+                        Write-Host "$_ Spend: `$${spend}"
+                    } catch {
+                        Write-Host "Error processing status '$_': $_" -ForegroundColor Red
+                    }
+                }                
 
-                $preOrderSpend = Get-Spend -distroAvailability "Pre-Order" -columnName "Total Cost"
-                $openOrderSpend = Get-Spend -distroAvailability "Open Order" -columnName "Total Cost"
-                $limitOrderSpend = Get-Spend -distroAvailability "Limit Order" -columnName "Total Cost"
-                $backOrderSpend = Get-Spend -distroAvailability "Back Order" -columnName "Total Cost"
+                $preOrderSpend = Get-Amount -distroAvailability "Pre-Order" -columnName "Total Cost"
+                $openOrderSpend = Get-Amount -distroAvailability "Open Order" -columnName "Total Cost"
+                $limitOrderSpend = Get-Amount -distroAvailability "Limit Order" -columnName "Total Cost"
+                $backOrderSpend = Get-Amount -distroAvailability "Back Order" -columnName "Total Cost"
 
-                Write-Output "`nOpen Order Spend: `$${openOrderSpend}"
-                Write-Output "Pre-Order Spend: `$${preOrderSpend}"
-                Write-Output "Limited Order Spend: `$${limitOrderSpend}"
-                Write-Output "Back Order Spend: `$${backOrderSpend}"
+                Write-Host "`nOpen Order Spend: `$${openOrderSpend}"
+                Write-Host "Pre-Order Spend: `$${preOrderSpend}"
+                Write-Host "Limited Order Spend: `$${limitOrderSpend}"
+                Write-Host "Back Order Spend: `$${backOrderSpend}"
                 
-                $curShippingCost = Get-Spend -status "SHIPPED" -columnName "Shipping Cost"
-                $totalSpend = Get-Spend -columnName "Total Cost"
-                $totalShippingCost = Get-Spend -columnName "Shipping Cost"
+                $curShippingCost = Get-Amount -status "SHIPPED" -columnName "Shipping Cost"
+                $totalSpend = Get-Amount -columnName "Total Cost"
+                $totalShippingCost = Get-Amount -columnName "Shipping Cost"
                 $aggregateCost = [Math]::Round($totalSpend + $shippingCost, 2)
 
-                Write-Output "`nCurrent Shipping Cost: `$${curShippingCost}"
-                Write-Output "Total Spend: `$${totalSpend}"
-                Write-Output "Total Shipping Cost: `$${totalShippingCost}"
-                Write-Output "Aggregate Cost: `$${aggregateCost}"
+                Write-Host "`nCurrent Shipping Cost: `$${curShippingCost}"
+                Write-Host "Total Spend: `$${totalSpend}"
+                Write-Host "Total Shipping Cost: `$${totalShippingCost}"
+                Write-Host "Aggregate Cost: `$${aggregateCost}"
             }
 
             $Response | Where-Object { $_."Product Requested" -notmatch "Quotes" } | Sort-Object -Property { [int]$_."Row Number" } | Out-GridView -Title $GRID_VIEW_TITLE
@@ -219,9 +223,9 @@ function ptcg()
 
                 $aggregateCost = [Math]::Round($totalCost + $shippingCost, 2)
 
-                Write-Output "Total Cost: `$${totalCost}"
-                Write-Output "Shipping Cost: `$${shippingCost}"
-                Write-Output "Aggregate Cost: `$${aggregateCost}"
+                Write-Host "Total Cost: `$${totalCost}"
+                Write-Host "Shipping Cost: `$${shippingCost}"
+                Write-Host "Aggregate Cost: `$${aggregateCost}"
             }
 
             $Response | Select-Object -Property ( 

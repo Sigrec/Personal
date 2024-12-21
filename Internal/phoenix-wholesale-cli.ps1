@@ -1,4 +1,4 @@
-[string]$VERSION = "1.0.5"
+[string]$VERSION = "1.0.6"
 
 function ptcg()
 {

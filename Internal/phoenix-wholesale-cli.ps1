@@ -21,7 +21,7 @@ function ptcg()
         [Parameter(Mandatory=$false)]
         [Alias("d")]
         [ValidateSet(1, 2, 3, 4, 5)]
-        [UInt16]$Distro = 0,
+        [UInt16]$Distro,
         [Parameter(Mandatory=$false)]
         [Alias("l")]
         [ValidateSet("English")]
@@ -611,7 +611,7 @@ function ptcg()
             Write-Host "    [`"product`", `"p`"] - Get product information for a specific IP and distro"
             Write-Host "        -IP <String> [Optional] [Alias: i]"
             Write-Host "            Filters the product based on its intellectual property (IP)."
-            Write-Host "        -Distro <UInt16> [Optional] [Alias: d]"
+            Write-Host "        -Distro <UInt16> [Alias: d]"
             Write-Host "            Filters the product based on the distributor. Valid values are 1, 2, 3, 4, 5."
             Write-Host ""
 

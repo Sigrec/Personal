@@ -59,13 +59,13 @@ function ptcg()
 
             # Process URLs in parallel with throttle limit
             $Response = $allResponses | ForEach-Object -Parallel {
-                Write-Host "Request: $_"
+                Write-Debug "Request: $_"
                 try {
                     $response = Invoke-WebRequest -Uri $_ -ErrorAction Stop
                     Write-Debug $response
                     return $response.Content | ConvertFrom-Csv
                 } catch {
-                    Write-Host "Error fetching URL: $_, $_"
+                    Write-Debug "Error fetching URL: $_, $_"
                     return $null  # Return $null if the request fails
                 }
             } -ThrottleLimit 3

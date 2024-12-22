@@ -21,7 +21,7 @@ function ptcg()
         [Parameter(Mandatory=$false)]
         [Alias("d")]
         [ValidateSet(1, 2, 3, 4, 5)]
-        [UInt16]$Distro=1,
+        [UInt16]$Distro=0,
         [Parameter(Mandatory=$false)]
         [Alias("l")]
         [ValidateSet("English")]
@@ -59,13 +59,13 @@ function ptcg()
 
             # Process URLs in parallel with throttle limit
             $Response = $allResponses | ForEach-Object -Parallel {
-                Write-Debug "Request: $_"
+                Write-Host "Request: $_"
                 try {
                     $response = Invoke-WebRequest -Uri $_ -ErrorAction Stop
                     Write-Debug $response
                     return $response.Content | ConvertFrom-Csv
                 } catch {
-                    Write-Debug "Error fetching URL: $_, $_"
+                    Write-Host "Error fetching URL: $_, $_"
                     return $null  # Return $null if the request fails
                 }
             } -ThrottleLimit 3
@@ -91,6 +91,8 @@ function ptcg()
                     $Response = $Response | Where-Object { $_."Distro Number" -match $Distro }
                 }
             }
+
+            $Response | Format-Table
 
             if (-not $Response -or $Response.Count -eq 0) {
                 Write-Error "No order(s) found"

@@ -92,8 +92,6 @@ function ptcg()
                 }
             }
 
-            $Response | Format-Table
-
             if (-not $Response -or $Response.Count -eq 0) {
                 Write-Error "No order(s) found"
                 return

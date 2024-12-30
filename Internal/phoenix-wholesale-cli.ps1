@@ -1,4 +1,4 @@
-[string]$VERSION = "1.0.6"
+[string]$VERSION = "2.0.0"
 
 function ptcg()
 {
@@ -28,7 +28,10 @@ function ptcg()
         [string]$Lang="English",
         [Parameter(Mandatory=$false)]
         [Alias("rn")]
-        [UInt64]$RowNum = 0
+        [UInt64]$RowNum = 0,
+        [Parameter(Mandatory=$false)]
+        [Alias("ca")]
+        [UInt64]$CaseAmount
     )
     [string]$MASTER_TRACKING_SHEET_URL = "https://docs.google.com/spreadsheets/d/1fWKRk_1i69rFE2ytxEmiAlHqYrPXVmhXSbG3fgGsl_I/export?format=csv"
 
@@ -174,13 +177,32 @@ function ptcg()
 
             Write-Debug "Request: $($MASTER_TRACKING_SHEET_URL)$($QUERY)"
             $Response = Invoke-WebRequest -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv
+
+            if (-not [string]::IsNullOrWhiteSpace($CaseAmount)) {
+                if ($CaseAmount -gt 0) {
+                    $Response = $Response | ForEach-Object {
+                        $TotalSpend = ([double]($_."Total Spend" -replace '[$,]', '')) # Strip $ and commas
+                    
+                        if ($TotalSpend -ge 5000) {
+                            [PSCustomObject]@{
+                                "Rank" = $_."Rank"
+                                "User Name" = $_."User Name"
+                                "Estimated Case Count" = (([double]($_."Percent of total spend" -replace '[%,]', '')) / 100) * $CaseAmount
+                            }
+                        }
+                    } | Where-Object { $_ -ne $null }
+                }
+                else {
+                    Write-Error "CaseAmount (ca) must be greater than 0"
+                }
+            }
             
             if (-not [string]::IsNullOrWhiteSpace($Name)) {
-              $Response = $Response | Where-Object { [UInt64]$_."User Name" -match $Name }
+                $Response = $Response | Where-Object { [UInt64]$_."User Name" -match $Name }
             }
 
             if (-not $Response -or $Response.Count -eq 0) {
-                Write-Host "No ranking found for `"$($Name)`""
+                Write-Host "No rankings found"
             }
             elseif ([string]::IsNullOrEmpty($Name)) {
                 $Response | Out-GridView -Title "Rankings"
@@ -596,6 +618,8 @@ function ptcg()
             Write-Host "    [`"ranking`", `"rank`", `"r`"] - Get rankings"
             Write-Host "        -Name <String> [Optional] [Alias: n]"
             Write-Host "            Specifies the discord member name to filter rankings."
+            Write-Host "        -CaseAmount <UInt64> [Optional] [Alias: ca]"
+            Write-Host "            The total amount of cases to determine estimated amount for a given user based off spend"
             Write-Host ""
 
             Write-Host "    [`"payments`", `"pay`"] - Get payments info"

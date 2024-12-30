@@ -1,4 +1,4 @@
-[string]$VERSION = "2.0.0"
+[string]$VERSION = "2.0.1"
 
 function ptcg()
 {
@@ -198,7 +198,7 @@ function ptcg()
             }
             
             if (-not [string]::IsNullOrWhiteSpace($Name)) {
-                $Response = $Response | Where-Object { [UInt64]$_."User Name" -match $Name }
+                $Response = $Response | Where-Object { [String]$_."User Name" -match $Name }
             }
 
             if (-not $Response -or $Response.Count -eq 0) {

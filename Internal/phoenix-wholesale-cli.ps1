@@ -1,4 +1,4 @@
-[string]$VERSION = "2.0.1"
+[string]$VERSION = "2.1.0"
 
 function ptcg()
 {
@@ -433,30 +433,6 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Union Arena" -or $_ -match "UA" } {
-                    $FULL_IP = "Union Arena"
-                    Write-Debug "Getting $FULL_IP Product"
-                    $SHEET_GID = 24121953
-                    switch($Distro) {
-                        { $_ -eq 1 } {
-                            $START_COLUMN = 'A'
-                            $END_COLUMN = 'E'
-                        }
-                        { $_ -eq 3 } {
-                            $START_COLUMN = 'G'
-                            $END_COLUMN = 'K'
-                        }
-                        { $_ -eq 5 } {
-                            $START_COLUMN = 'M'
-                            $END_COLUMN = 'Q'
-                        }
-                        default {
-                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
-                            return
-                        }
-                    }
-                    $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
-                }
                 { $_ -match "Weiss Schwarz" -or $_ -match "WS" -or $_ -match "Weiss" } {
                     $FULL_IP = "Weiss Schwarz"
                     Write-Debug "Getting $FULL_IP Product"
@@ -513,21 +489,30 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Bandai" -or $_ -match "Dragon Ball Super" -or $_ -match "DBS" -or $_ -match "Dragon Ball" -or $_ -match "Digimon" -or $_ -match "Digi" -or $_ -match "One Piece" -or $_ -match "OP" }  {
+                { @("Bandai", "Dragon Ball Super", "DBS", "Dragon Ball", "Digimon", "Digi", "One Piece", "OP", "Union Arena", "UA", "Gundam", "GCG") -contains $_ }  {
                     $FULL_IP = "Bandai"
+                    $HEADERS += "Product Info"
                     Write-Debug "Getting $FULL_IP Product for Distro #$Distro"
-                    $SHEET_GID = 53171288
+                    $SHEET_GID = 24121953
                     switch($Distro) {
-                        { $_ -eq 5 } {
+                        { $_ -eq 1 } {
                             $START_COLUMN = 'A'
                             $END_COLUMN = 'E'
+                        }  
+                        { $_ -eq 3 } {
+                            $START_COLUMN = 'G'
+                            $END_COLUMN = 'L'
+                        }  
+                        { $_ -eq 5 } {
+                            $START_COLUMN = 'M'
+                            $END_COLUMN = 'Q'
                         }   
                         default {
                             Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
                             return
                         }
                     }
-                    $SHEET_RANGE = "$($START_COLUMN)11:$($END_COLUMN)&tq=SELECT%20*"
+                    $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
                 }
                 { $_ -match "Item Request" -or $_ -match "Request" -or $_ -match "IR" } {
                     $SHEET_GID = 1689199249
@@ -541,7 +526,7 @@ function ptcg()
                 }
             }
 
-            if (@("Dragon Ball Super", "DBS", "Digimon", "One Piece", "OP") -match $IP) {
+            if (@("Dragon Ball Super", "DBS", "Digimon", "Digi", "One Piece", "OP", "Union Arena", "UA", "Gundam", "GCG") -match $IP) {
                 Write-Debug "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)"
                 Write-Debug "Filtering Bandai Product"
                 switch($IP) {
@@ -553,6 +538,12 @@ function ptcg()
                     }
                     { $_ -match "One Piece" -or $_ -match "OP" } {
                         $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "One Piece" }
+                    }
+                    { $_ -match "Union Arena" -or $_ -match "UA" } {
+                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Union Arena" }
+                    }
+                    { $_ -match "Gundam" -or $_ -match "GCG" } {
+                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Gundam" }
                     }
                 }
             }

@@ -1,4 +1,4 @@
-[string]$VERSION = "2.1.0"
+[string]$VERSION = "2.2.0"
 
 function ptcg()
 {
@@ -101,7 +101,7 @@ function ptcg()
             }
 
             # Calculate costs
-            if (-not [string]::IsNullOrWhiteSpace($Name) -and ($Status -notmatch "HIDE")) {
+            if (-not [string]::IsNullOrWhiteSpace($Name) -and ($Status -notmatch "HIDE") -and [string]::IsNullOrWhiteSpace($Product)) {
                 function Get-Amount {
                     param (
                         [string]$status = "",
@@ -167,6 +167,50 @@ function ptcg()
                 Write-Host "Total Spend: `$${totalSpend}"
                 Write-Host "Total Shipping Cost: `$${totalShippingCost}"
                 Write-Host "Aggregate Cost: `$${aggregateCost}"
+            }
+            elseif ($Status -notmatch "HIDE" -and -not [string]::IsNullOrWhiteSpace($Product)) {
+                # Initialize hashtable to hold aggregated results
+                $aggregatedResults = @{}
+                [decimal]$totalAllProductsCost = 0.0
+
+                # Iterate through each row in the $Response to manually accumulate the data
+                foreach ($row in $Response) {
+                    $product = $row."Product Requested"
+                    $qtyReq = [int]$row."Qty Req"
+                    $totalCost = $row."Total Cost" -replace '[$,]', ''  # Clean the value
+
+                    # Convert totalCost to decimal
+                    $totalCost = [decimal]$totalCost
+                    $totalAllProductsCost += $totalCost
+
+                    # Initialize product in hashtable if not already present
+                    if (-not $aggregatedResults.ContainsKey($product)) {
+                        $aggregatedResults[$product] = @{
+                            TotalQtyReq = 0
+                            TotalCost = 0.0
+                        }
+                    }
+
+                    # Update the totals for the product
+                    $aggregatedResults[$product].TotalQtyReq += $qtyReq
+                    $aggregatedResults[$product].TotalCost += $totalCost
+                }
+
+                $summary = $aggregatedResults.GetEnumerator() | ForEach-Object {
+                    [PSCustomObject]@{
+                        "Product Requested" = $_.Key
+                        "Total Qty Req" = [math]::Round($_.Value.TotalQtyReq, 0)
+                        "Total Cost" = [math]::Round($_.Value.TotalCost, 2).ToString("#,0.00")
+                    }
+                }
+
+                # Output the summary as a formatted table to the console
+                $summary | Format-Table -Property "Product Requested", "Total Qty Req", @{Name="Total Cost";Expression={"$" + $_."Total Cost"}} -AutoSize
+
+                # Print the total spend for all products combined
+                [string]$totalSpend = "$" + $totalAllProductsCost.ToString("#,0.00")
+                Write-Host "Total Spend: " -NoNewline
+                Write-Host $totalSpend -ForegroundColor Green
             }
 
             $Response | Where-Object { $_."Product Requested" -notmatch "Quotes" } | Sort-Object -Property { [int]$_."Row Number" } | Out-GridView -Title $GRID_VIEW_TITLE
@@ -513,6 +557,30 @@ function ptcg()
                         }
                     }
                     $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
+                }
+                { $_ -match "holoLive" -or $_ -match "HL" } {
+                    $FULL_IP = "holoLive"
+                    Write-Debug "Getting $FULL_IP Product"
+                    $SHEET_GID = 941844023
+                    switch($Distro) {
+                        { $_ -eq 1 } {
+                            $START_COLUMN = 'A'
+                            $END_COLUMN = 'E'
+                        }
+                        { $_ -eq 3 } {
+                            $START_COLUMN = 'G'
+                            $END_COLUMN = 'K'
+                        }
+                        { $_ -eq 5 } {
+                            $START_COLUMN = 'M'
+                            $END_COLUMN = 'Q'
+                        }   
+                        default {
+                            Write-Error "Distro #$Distro does not have `"$FULL_IP`" product"
+                            return
+                        }
+                    }
+                    $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
                 { $_ -match "Item Request" -or $_ -match "Request" -or $_ -match "IR" } {
                     $SHEET_GID = 1689199249

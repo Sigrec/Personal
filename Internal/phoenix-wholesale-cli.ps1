@@ -168,13 +168,8 @@ function ptcg()
                 Write-Host "Total Shipping Cost: `$${totalShippingCost}"
                 Write-Host "Aggregate Cost: `$${aggregateCost}"
             }
-            elseif ($Status -notmatch "HIDE" -and -not [string]::IsNullOrWhiteSpace($Product)) {
+            elseif ($Status -notmatch "HIDE" -and -not [string]::IsNullOrWhiteSpace($Product) -and [string]::IsNullOrWhiteSpace($Name)) {
                 # Initialize hashtable to hold aggregated results
-                # $aggregatedResultsDistro1 = @{}
-                # $aggregatedResultsDistro2 = @{}
-                # $aggregatedResultsDistro3 = @{}
-                # $aggregatedResultsDistro4 = @{}
-                # $aggregatedResultsDistro5 = @{}
                 $aggregatedResultsList = @(
                     @{},
                     @{},
@@ -185,73 +180,38 @@ function ptcg()
                 $totalProductCostList = [decimal[]]::new(5)
 
                 # Iterate through each row in the $Response to manually accumulate the data
+                # Write-Host $Response[0].psobject.Properties | ForEach-Object { $_.Name }
                 foreach ($row in $Response) {
-                    $distro = $row."Distro Number"
-                    $product = $row."Product Requested"
-                    $qtyReq = [int]$row."Qty Req"
-                    $totalCost = $row."Total Cost" -replace '[$,]', ''  # Clean the value
+                    [string]$distro = $row."Distro Number"
+                    [string]$product = $row."Product Requested"
+                    [uint]$qtyReq = [uint]$row."Qty Req"
+                    [decimal]$totalCost = [decimal]($row."Total Cost" -replace '[$,]', '')  # Clean the value
 
                     # Initialize product in hashtable if not already present
-                    switch($distro) {
-                        "1" {
-                            $totalProductCostList[0] += [decimal]$totalCost
-                            if (-not $aggregatedResultsList[0].ContainsKey($product)) {
-                                $aggregatedResultsList[0][$product] = @{
-                                    TotalQtyReq = 0
-                                    TotalCost = 0.0
-                                }
-                            }
-                            $aggregatedResultsList[0][$product].TotalQtyReq += $qtyReq
-                            $aggregatedResultsList[0][$product].TotalCost += $totalCost
-                        }
-                        "2" {
-                            $totalProductCostList[1] += [decimal]$totalCost
-                            if (-not $aggregatedResultsList[1].ContainsKey($product)) {
-                                $aggregatedResultsList[1][$product] = @{
-                                    TotalQtyReq = 0
-                                    TotalCost = 0.0
-                                }
-                            }
-                            $aggregatedResultsList[1][$product].TotalQtyReq += $qtyReq
-                            $aggregatedResultsList[1][$product].TotalCost += $totalCost
-                        }
-                        "3" {
-                            $totalProductCostList[2] += [decimal]$totalCost
-                            if (-not $aggregatedResultsList[2].ContainsKey($product)) {
-                                $aggregatedResultsList[2][$product] = @{
-                                    TotalQtyReq = 0
-                                    TotalCost = 0.0
-                                }
-                            }
-                            $aggregatedResultsList[2][$product].TotalQtyReq += $qtyReq
-                            $aggregatedResultsList[2][$product].TotalCost += $totalCost
-                        }
-                        "4" {
-                            $totalProductCostList[3] += [decimal]$totalCost
-                            if (-not $aggregatedResultsList[3].ContainsKey($product)) {
-                                $aggregatedResultsList[3][$product] = @{
-                                    TotalQtyReq = 0
-                                    TotalCost = 0.0
-                                }
-                            }
-                            $aggregatedResultsList[3][$product].TotalQtyReq += $qtyReq
-                            $aggregatedResultsList[3][$product].TotalCost += $totalCost
-                        }
-                        "5" {
-                            $totalProductCostList[4] += [decimal]$totalCost
-                            if (-not $aggregatedResultsList[4].ContainsKey($product)) {
-                                $aggregatedResultsList[4][$product] = @{
-                                    TotalQtyReq = 0
-                                    TotalCost = 0.0
-                                }
-                            }
-                            $aggregatedResultsList[4][$product].TotalQtyReq += $qtyReq
-                            $aggregatedResultsList[4][$product].TotalCost += $totalCost
+                    if ($distro -ne "Pokewholemart") {
+                        $distroIndex = [int]($distro.TrimStart('#')) - 1  # Convert "#1" -> 0, "#2" -> 1, etc.
+                    }
+                    else {
+                        continue
+                    }
+
+                    # Update total product cost list
+                    $totalProductCostList[$distroIndex] += $totalCost
+
+                    # Initialize product in the hashtable if not already present
+                    if (-not $aggregatedResultsList[$distroIndex].ContainsKey($product)) {
+                        $aggregatedResultsList[$distroIndex][$product] = @{
+                            TotalQtyReq = 0
+                            TotalCost   = 0.0
                         }
                     }
+
+                    # Update the quantities and total costs
+                    $aggregatedResultsList[$distroIndex][$product].TotalQtyReq += $qtyReq
+                    $aggregatedResultsList[$distroIndex][$product].TotalCost += $totalCost
                 }
 
-                for ($i = 0; $i -lt 5; $i++) {
+                for ($i = 0; $i -lt $aggregatedResultsList.Count; $i++) {
                     $aggregatedResultsDistro = $aggregatedResultsList[$i]
                     if ($aggregatedResultsDistro.Count -gt 0) {
                         $distro = $i + 1
@@ -264,7 +224,7 @@ function ptcg()
                         }
 
                         # Output the summary as a formatted table to the console
-                        $summary | Format-Table -Property "Distro $distro Product Requested", "Total Qty Req", @{Name="Total Cost";Expression={"$" + $_."Total Cost"}} -AutoSize
+                        $summary | Sort-Object "Distro $distro Product Requested" | Format-Table -Property "Distro $distro Product Requested", "Total Qty Req", @{Name="Total Cost";Expression={"$" + $_."Total Cost"}} -AutoSize
 
                         # Print the total spend for all products combined
                         [string]$totalSpend = "$" + $totalProductCostList[$i].ToString("#,0.00")

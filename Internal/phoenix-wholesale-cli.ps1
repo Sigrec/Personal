@@ -1,4 +1,4 @@
-[string]$VERSION = "2.2.0"
+[string]$VERSION = "2.3.0"
 
 function ptcg()
 {
@@ -170,47 +170,107 @@ function ptcg()
             }
             elseif ($Status -notmatch "HIDE" -and -not [string]::IsNullOrWhiteSpace($Product)) {
                 # Initialize hashtable to hold aggregated results
-                $aggregatedResults = @{}
-                [decimal]$totalAllProductsCost = 0.0
+                # $aggregatedResultsDistro1 = @{}
+                # $aggregatedResultsDistro2 = @{}
+                # $aggregatedResultsDistro3 = @{}
+                # $aggregatedResultsDistro4 = @{}
+                # $aggregatedResultsDistro5 = @{}
+                $aggregatedResultsList = @(
+                    @{},
+                    @{},
+                    @{},
+                    @{},
+                    @{}
+                )
+                $totalProductCostList = [decimal[]]::new(5)
 
                 # Iterate through each row in the $Response to manually accumulate the data
                 foreach ($row in $Response) {
+                    $distro = $row."Distro Number"
                     $product = $row."Product Requested"
                     $qtyReq = [int]$row."Qty Req"
                     $totalCost = $row."Total Cost" -replace '[$,]', ''  # Clean the value
 
-                    # Convert totalCost to decimal
-                    $totalCost = [decimal]$totalCost
-                    $totalAllProductsCost += $totalCost
-
                     # Initialize product in hashtable if not already present
-                    if (-not $aggregatedResults.ContainsKey($product)) {
-                        $aggregatedResults[$product] = @{
-                            TotalQtyReq = 0
-                            TotalCost = 0.0
+                    switch($distro) {
+                        "1" {
+                            $totalProductCostList[0] += [decimal]$totalCost
+                            if (-not $aggregatedResultsList[0].ContainsKey($product)) {
+                                $aggregatedResultsList[0][$product] = @{
+                                    TotalQtyReq = 0
+                                    TotalCost = 0.0
+                                }
+                            }
+                            $aggregatedResultsList[0][$product].TotalQtyReq += $qtyReq
+                            $aggregatedResultsList[0][$product].TotalCost += $totalCost
+                        }
+                        "2" {
+                            $totalProductCostList[1] += [decimal]$totalCost
+                            if (-not $aggregatedResultsList[1].ContainsKey($product)) {
+                                $aggregatedResultsList[1][$product] = @{
+                                    TotalQtyReq = 0
+                                    TotalCost = 0.0
+                                }
+                            }
+                            $aggregatedResultsList[1][$product].TotalQtyReq += $qtyReq
+                            $aggregatedResultsList[1][$product].TotalCost += $totalCost
+                        }
+                        "3" {
+                            $totalProductCostList[2] += [decimal]$totalCost
+                            if (-not $aggregatedResultsList[2].ContainsKey($product)) {
+                                $aggregatedResultsList[2][$product] = @{
+                                    TotalQtyReq = 0
+                                    TotalCost = 0.0
+                                }
+                            }
+                            $aggregatedResultsList[2][$product].TotalQtyReq += $qtyReq
+                            $aggregatedResultsList[2][$product].TotalCost += $totalCost
+                        }
+                        "4" {
+                            $totalProductCostList[3] += [decimal]$totalCost
+                            if (-not $aggregatedResultsList[3].ContainsKey($product)) {
+                                $aggregatedResultsList[3][$product] = @{
+                                    TotalQtyReq = 0
+                                    TotalCost = 0.0
+                                }
+                            }
+                            $aggregatedResultsList[3][$product].TotalQtyReq += $qtyReq
+                            $aggregatedResultsList[3][$product].TotalCost += $totalCost
+                        }
+                        "5" {
+                            $totalProductCostList[4] += [decimal]$totalCost
+                            if (-not $aggregatedResultsList[4].ContainsKey($product)) {
+                                $aggregatedResultsList[4][$product] = @{
+                                    TotalQtyReq = 0
+                                    TotalCost = 0.0
+                                }
+                            }
+                            $aggregatedResultsList[4][$product].TotalQtyReq += $qtyReq
+                            $aggregatedResultsList[4][$product].TotalCost += $totalCost
                         }
                     }
-
-                    # Update the totals for the product
-                    $aggregatedResults[$product].TotalQtyReq += $qtyReq
-                    $aggregatedResults[$product].TotalCost += $totalCost
                 }
 
-                $summary = $aggregatedResults.GetEnumerator() | ForEach-Object {
-                    [PSCustomObject]@{
-                        "Product Requested" = $_.Key
-                        "Total Qty Req" = [math]::Round($_.Value.TotalQtyReq, 0)
-                        "Total Cost" = [math]::Round($_.Value.TotalCost, 2).ToString("#,0.00")
+                for ($i = 0; $i -lt 5; $i++) {
+                    $aggregatedResultsDistro = $aggregatedResultsList[$i]
+                    if ($aggregatedResultsDistro.Count -gt 0) {
+                        $distro = $i + 1
+                        $summary = $aggregatedResultsDistro.GetEnumerator() | ForEach-Object {
+                            [PSCustomObject]@{
+                                "Distro $distro Product Requested" = $_.Key
+                                "Total Qty Req" = [math]::Round($_.Value.TotalQtyReq, 0)
+                                "Total Cost" = [math]::Round($_.Value.TotalCost, 2).ToString("#,0.00")
+                            }
+                        }
+
+                        # Output the summary as a formatted table to the console
+                        $summary | Format-Table -Property "Distro $distro Product Requested", "Total Qty Req", @{Name="Total Cost";Expression={"$" + $_."Total Cost"}} -AutoSize
+
+                        # Print the total spend for all products combined
+                        [string]$totalSpend = "$" + $totalProductCostList[$i].ToString("#,0.00")
+                        Write-Host "Distro $distro Total Spend: $totalSpend" -ForegroundColor Green
                     }
                 }
-
-                # Output the summary as a formatted table to the console
-                $summary | Format-Table -Property "Product Requested", "Total Qty Req", @{Name="Total Cost";Expression={"$" + $_."Total Cost"}} -AutoSize
-
-                # Print the total spend for all products combined
-                [string]$totalSpend = "$" + $totalAllProductsCost.ToString("#,0.00")
-                Write-Host "Total Spend: " -NoNewline
-                Write-Host $totalSpend -ForegroundColor Green
             }
 
             $Response | Where-Object { $_."Product Requested" -notmatch "Quotes" } | Sort-Object -Property { [int]$_."Row Number" } | Out-GridView -Title $GRID_VIEW_TITLE

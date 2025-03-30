@@ -1,4 +1,4 @@
-[string]$VERSION = "2.3.0"
+[string]$VERSION = "2.4.0"
 
 function ptcg()
 {
@@ -14,7 +14,7 @@ function ptcg()
         [string]$Status,
         [Parameter(Mandatory=$false)]
         [Alias("p")]
-        [string]$Product,
+        [string[]]$Product,
         [Parameter(Mandatory=$false)]
         [Alias("i")]
         [string]$IP,
@@ -82,16 +82,19 @@ function ptcg()
             }
             else {
                 if (-not [string]::IsNullOrWhiteSpace($Name)) {
-                    $Response = $Response | Where-Object { $_."Name" -match $Name }
+                    $Response = $Response | Where-Object { $_."Name" -ilike "*$Name*" }
                 }
-                if (-not [string]::IsNullOrWhiteSpace($Product)) {
-                    $Response = $Response | Where-Object { $_."Product Requested" -match $Product }
+                if ($Product.Count -ne 0) {
+                    $Response = $Response | Where-Object {
+                        $outerProduct = $_."Product Requested"
+                        $Product | Where-Object { $outerProduct -ilike "*$_*" } | Measure-Object | Select-Object -ExpandProperty Count | Where-Object { $_ -gt 0 }
+                    }
                 }
                 if ((-not [string]::IsNullOrWhiteSpace($Status)) -and ($Status -notmatch "HIDE")) {
-                    $Response = $Response | Where-Object { $_."Status" -match $Status }
+                    $Response = $Response | Where-Object { $_."Status" -eq $Status }
                 }
                 if ($Distro -ne 0) {
-                    $Response = $Response | Where-Object { $_."Distro Number" -match $Distro }
+                    $Response = $Response | Where-Object { $_."Distro Number" -eq $Distro }
                 }
             }
 
@@ -99,9 +102,10 @@ function ptcg()
                 Write-Error "No order(s) found"
                 return
             }
+            $FormatEnumerationLimit = -1
 
             # Calculate costs
-            if (-not [string]::IsNullOrWhiteSpace($Name) -and ($Status -notmatch "HIDE") -and [string]::IsNullOrWhiteSpace($Product)) {
+            if (-not [string]::IsNullOrWhiteSpace($Name) -and ($Status -notmatch "HIDE") -and $Product.Count -eq 0) {
                 function Get-Amount {
                     param (
                         [string]$status = "",
@@ -168,7 +172,7 @@ function ptcg()
                 Write-Host "Total Shipping Cost: `$${totalShippingCost}"
                 Write-Host "Aggregate Cost: `$${aggregateCost}"
             }
-            elseif ($Status -notmatch "HIDE" -and -not [string]::IsNullOrWhiteSpace($Product) -and [string]::IsNullOrWhiteSpace($Name)) {
+            elseif (($Status -notmatch "HIDE") -and ($Product.Count -ne 0) -and [string]::IsNullOrWhiteSpace($Name)) {
                 # Initialize hashtable to hold aggregated results
                 $aggregatedResultsList = @(
                     @{},
@@ -211,6 +215,7 @@ function ptcg()
                     $aggregatedResultsList[$distroIndex][$product].TotalCost += $totalCost
                 }
 
+                [decimal]$totalOveralSpend = 0.0
                 for ($i = 0; $i -lt $aggregatedResultsList.Count; $i++) {
                     $aggregatedResultsDistro = $aggregatedResultsList[$i]
                     if ($aggregatedResultsDistro.Count -gt 0) {
@@ -228,9 +233,14 @@ function ptcg()
 
                         # Print the total spend for all products combined
                         [string]$totalSpend = "$" + $totalProductCostList[$i].ToString("#,0.00")
-                        Write-Host "Distro $distro Total Spend: $totalSpend" -ForegroundColor Green
+                        Write-Host "Distro $distro Total Spend: $totalSpend" -ForegroundColor Yellow
+                        $totalOveralSpend += $totalProductCostList[$i]
+
                     }
                 }
+
+                [string]$totalSpend = "$" + $totalOveralSpend.ToString("#,0.00")
+                Write-Host "`nTotal Spend: $totalSpend" -ForegroundColor Blue
             }
 
             $Response | Where-Object { $_."Product Requested" -notmatch "Quotes" } | Sort-Object -Property { [int]$_."Row Number" } | Out-GridView -Title $GRID_VIEW_TITLE

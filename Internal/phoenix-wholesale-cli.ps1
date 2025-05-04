@@ -1,4 +1,4 @@
-[string]$VERSION = "2.4.0"
+[string]$VERSION = "2.4.1"
 
 function ptcg()
 {
@@ -54,30 +54,60 @@ function ptcg()
             }
 
             # Add other necessary tracking sheet URLs
-            $allResponses += @(
+            $allResponses = @(
                 "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_GID)",
                 "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_PREORDER_GID)",
                 "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_COMPLETE_GID)"
             )
 
-            # Process URLs in parallel with throttle limit
-            $Response = $allResponses | ForEach-Object -Parallel {
-                Write-Debug "Request: $_"
+            # Step 1: Fetch content from all sheets in parallel
+            # Fetch and parse each sheet in parallel
+            $parsedSheets = $allResponses | ForEach-Object -Parallel {
                 try {
                     $response = Invoke-WebRequest -Uri $_ -ErrorAction Stop
-                    Write-Debug $response
-                    return $response.Content | ConvertFrom-Csv
+                    $csvRows = $response.Content | ConvertFrom-Csv
+                    # Return both the rows and their headers
+                    return @{
+                        Rows    = $csvRows
+                        Headers = if ($csvRows) { $csvRows[0].PSObject.Properties.Name } else { @() }
+                    }
                 } catch {
-                    Write-Debug "Error fetching URL: $_, $_"
-                    return $null  # Return $null if the request fails
+                    Write-Debug "Error fetching: $_"
+                    return $null
                 }
             } -ThrottleLimit 3
+
+            # Initialize header and row collections
+            $allRows = [System.Collections.Generic.List[string]]::new()
+            $headerSet = [System.Collections.Generic.HashSet[string]]::new()
+            $headerTracker = [System.Collections.Generic.List[string]]::new()
+
+            # Flatten results and track headers
+            foreach ($sheet in $parsedSheets) {
+                if ($null -ne $sheet) {
+                    foreach ($header in $sheet.Headers) {
+                        if ($headerSet.Add($header)) {
+                            $headerTracker.Add($header)
+                        }
+                    }
+                    $allRowsList.AddRange($sheet.Rows)
+                }
+            }
+
+            # Normalize rows to ensure consistent headers
+            $Response = foreach ($row in $allRows) {
+                $newObj = [ordered]@{}
+                foreach ($header in $headerTracker) {
+                    $newObj[$header] = $row.PSObject.Properties[$header]?.Value
+                }
+                [PSCustomObject]$newObj
+            }
 
             # Filter out null responses if there were any failed requests
             $Response = $Response | Where-Object { $_ -ne $null }
 
             # Filter contents of the array
-            if (($null -ne $RowNum) -and ($RowNum -ne 0)) {
+            if (($null -ne $RowNum) -and ($RowNum -ne 0)) { # Get the specific row number
                 $Response = $Response | Where-Object { $_."Row Number" -eq $RowNum }
             }
             else {
@@ -90,7 +120,7 @@ function ptcg()
                         $Product | Where-Object { $outerProduct -ilike "*$_*" } | Measure-Object | Select-Object -ExpandProperty Count | Where-Object { $_ -gt 0 }
                     }
                 }
-                if ((-not [string]::IsNullOrWhiteSpace($Status)) -and ($Status -notmatch "HIDE")) {
+                if (-not [string]::IsNullOrWhiteSpace($Status)) {
                     $Response = $Response | Where-Object { $_."Status" -eq $Status }
                 }
                 if ($Distro -ne 0) {
@@ -102,7 +132,6 @@ function ptcg()
                 Write-Error "No order(s) found"
                 return
             }
-            $FormatEnumerationLimit = -1
 
             # Calculate costs
             if (-not [string]::IsNullOrWhiteSpace($Name) -and ($Status -notmatch "HIDE") -and $Product.Count -eq 0) {

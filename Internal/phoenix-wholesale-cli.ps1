@@ -78,7 +78,7 @@ function ptcg()
             } -ThrottleLimit 3
 
             # Initialize header and row collections
-            $allRows = [System.Collections.Generic.List[string]]::new()
+            $allRows = [System.Collections.Generic.List[object]]::new()
             $headerSet = [System.Collections.Generic.HashSet[string]]::new()
             $headerTracker = [System.Collections.Generic.List[string]]::new()
 
@@ -90,7 +90,7 @@ function ptcg()
                             $headerTracker.Add($header)
                         }
                     }
-                    $allRowsList.AddRange($sheet.Rows)
+                    $allRows.AddRange($sheet.Rows)
                 }
             }
 

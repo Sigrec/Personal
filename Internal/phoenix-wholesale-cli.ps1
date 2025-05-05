@@ -333,11 +333,12 @@ function ptcg()
             elseif ([string]::IsNullOrWhiteSpace($Name)) {
                 $rankCounter = 0
                 $Response | 
-                    Sort-Object -Property { [decimal]($_.Spend -replace '[$,]', '') } -Descending | 
+                    Sort-Object -Property { [decimal]($_."Spend" -replace '[$,]', '') } -Descending | 
                     ForEach-Object {
-                        # If $CaseAmount is greater than 0, calculate the new property value
+                        $PercentSpend = [decimal]($_."Spend" -replace '[$,]', '') / $TotalSpend
+                        $_ | Add-Member -MemberType NoteProperty -Name "Percent Spend" -Value "$(([math]::Round($PercentSpend * 100, 2)))%"
                         if ($CaseAmount -gt 0) {
-                            $_ | Add-Member -MemberType NoteProperty -Name "Case Count" -Value ([math]::Round(([decimal]($_.Spend -replace '[$,]', '') / $TotalSpend) * $CaseAmount, 2))
+                            $_ | Add-Member -MemberType NoteProperty -Name "Case Count" -Value ([math]::Round($PercentSpend * $CaseAmount, 2))
                         }
                         $_.Rank = ++$rankCounter  # Assign the rank value to the existing Rank property
                         $_  # Return the modified object

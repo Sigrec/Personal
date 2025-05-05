@@ -65,8 +65,8 @@ function ptcg()
             # Fetch and parse each sheet in parallel
             $parsedSheets = $allResponses | ForEach-Object -Parallel {
                 try {
-                    $response = Invoke-RestMethod -Uri $_ -ErrorAction Stop
-                    $csvRows = $response.Content | ConvertFrom-Csv
+                    Write-Debug $_
+                    $csvRows = Invoke-RestMethod -Uri $_ | ConvertFrom-Csv
                     # Return both the rows and their headers
                     return @{
                         Rows    = $csvRows

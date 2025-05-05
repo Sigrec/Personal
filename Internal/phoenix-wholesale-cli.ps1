@@ -1,4 +1,4 @@
-[string]$VERSION = "2.4.1"
+[string]$VERSION = "3.0.0"
 
 function ptcg()
 {
@@ -10,14 +10,15 @@ function ptcg()
         [string]$Name,
         [Parameter(Mandatory=$false)]
         [Alias("s")]
-        [ValidateSet("HIDE", "PLACED", "ALLOCATING", "INVOICING", "PENDING PAYMENT", "PAID", "SHIPPING", "SHIPPED", "COMPLETE")]
+        [ValidateSet("HIDE", "PLACED", "ALLOCATING", "INVOICING", "PENDING PAYMENT", "PAID", "SHIPPING", "SHIPPED", "COMPLETE", IgnoreCase=$true)]
         [string]$Status,
         [Parameter(Mandatory=$false)]
         [Alias("p")]
         [string[]]$Product,
         [Parameter(Mandatory=$false)]
         [Alias("i")]
-        [string]$IP,
+        [ValidateSet("PK", "MTG", "HL", "SCR", "GA", "SWU", "YGO", "LOR", "FAB", "DBS", "DM", "OP", "UA", "GCG", "IR", "Bandai", "Supplies", IgnoreCase=$true)]
+        [string]$IP = "PK",
         [Parameter(Mandatory=$false)]
         [Alias("d")]
         [ValidateSet(1, 2, 3, 4, 5)]
@@ -31,7 +32,7 @@ function ptcg()
         [UInt64]$RowNum = 0,
         [Parameter(Mandatory=$false)]
         [Alias("ca")]
-        [UInt64]$CaseAmount
+        [UInt128]$CaseAmount = 0
     )
     [string]$MASTER_TRACKING_SHEET_URL = "https://docs.google.com/spreadsheets/d/1fWKRk_1i69rFE2ytxEmiAlHqYrPXVmhXSbG3fgGsl_I/export?format=csv"
 
@@ -64,7 +65,7 @@ function ptcg()
             # Fetch and parse each sheet in parallel
             $parsedSheets = $allResponses | ForEach-Object -Parallel {
                 try {
-                    $response = Invoke-WebRequest -Uri $_ -ErrorAction Stop
+                    $response = Invoke-RestMethod -Uri $_ -ErrorAction Stop
                     $csvRows = $response.Content | ConvertFrom-Csv
                     # Return both the rows and their headers
                     return @{
@@ -279,26 +280,48 @@ function ptcg()
             [string]$QUERY = "&gid=$($RANKING_SHEET_GID)"
 
             Write-Debug "Request: $($MASTER_TRACKING_SHEET_URL)$($QUERY)"
-            $Response = Invoke-WebRequest -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv
+            $Response = Invoke-RestMethod -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv
 
-            if (-not [string]::IsNullOrWhiteSpace($CaseAmount)) {
-                if ($CaseAmount -gt 0) {
-                    $Response = $Response | ForEach-Object {
-                        $TotalSpend = ([double]($_."Total Spend" -replace '[$,]', '')) # Strip $ and commas
-                    
-                        if ($TotalSpend -ge 5000) {
-                            [PSCustomObject]@{
-                                "Rank" = $_."Rank"
-                                "User Name" = $_."User Name"
-                                "Estimated Case Count" = (([double]($_."Percent of total spend" -replace '[%,]', '')) / 100) * $CaseAmount
-                            }
-                        }
-                    } | Where-Object { $_ -ne $null }
-                }
-                else {
-                    Write-Error "CaseAmount (ca) must be greater than 0"
-                }
+            # Get the header if $IP is selected
+            # Mapping abbreviations to full keys
+            $ipMap = @{
+                "MTG" = "Magic"
+                "FAB" = "FaB"
+                "GA"  = "Grand Archive"
+                "LOR" = "Lorcana"
+                "SRC" = "Sorcery"
+                "SWU" = "Star Wars Unlimited"
+                "YGO" = "Yu-Gi-Oh"
+                "OP"  = "Distro 5 Bandai"
+                "HL"  = "holoLive"
             }
+
+            # Handle Bandai aliases
+            if ($IP -match '^(Bandai|DB|DM|UA)$') {
+                $key = "Bandai"
+                Write-Debug "Processing Bandai product rankings..."
+            }
+            elseif ($ipMap.ContainsKey($IP)) {
+                $key = $ipMap[$IP]
+                Write-Debug "Processing $key product rankings..."
+            }
+            else {
+                $key = "Pokemon"
+                Write-Debug "Processing Pokémon product rankings..."
+            }
+
+            [decimal]$TotalSpend = 0
+            $Response = $Response | ForEach-Object {
+                $Spend = [decimal]($_.$key -replace '[$,]', '') # Strip $ and commas
+                $TotalSpend += $Spend
+                if ($key -eq "PK" -or $Spend -gt 0) {
+                    [PSCustomObject]@{
+                        "Rank" = 0
+                        "User Name" = $_."User Name"
+                        "Spend" = $_.$key
+                    }
+                }
+            } | Where-Object { $_ -ne $null }
             
             if (-not [string]::IsNullOrWhiteSpace($Name)) {
                 $Response = $Response | Where-Object { [String]$_."User Name" -match $Name }
@@ -307,11 +330,22 @@ function ptcg()
             if (-not $Response -or $Response.Count -eq 0) {
                 Write-Host "No rankings found"
             }
-            elseif ([string]::IsNullOrEmpty($Name)) {
-                $Response | Out-GridView -Title "Rankings"
+            elseif ([string]::IsNullOrWhiteSpace($Name)) {
+                $rankCounter = 0
+                $Response | 
+                    Sort-Object -Property { [decimal]($_.Spend -replace '[$,]', '') } -Descending | 
+                    ForEach-Object {
+                        # If $CaseAmount is greater than 0, calculate the new property value
+                        if ($CaseAmount -gt 0) {
+                            $_ | Add-Member -MemberType NoteProperty -Name "Case Count" -Value ([math]::Round(([decimal]($_.Spend -replace '[$,]', '') / $TotalSpend) * $CaseAmount, 2))
+                        }
+                        $_.Rank = ++$rankCounter  # Assign the rank value to the existing Rank property
+                        $_  # Return the modified object
+                    } | 
+                    Out-GridView -Title "Rankings"
             }
             else {
-                $Response | Format-Table -AutoSize -Wrap
+                $Response| Format-Table -AutoSize -Wrap
             }
         }
         {$_ -in "payments", "pay"} {
@@ -321,7 +355,7 @@ function ptcg()
             [string]$GRID_VIEW_TITLE = "Payments Info"
 
             Write-Debug "Request: $($MASTER_TRACKING_SHEET_URL)$($QUERY)"
-            $Response = Invoke-WebRequest -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv
+            $Response = Invoke-RestMethod -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv
 
             if (($null -ne $RowNum) -and ($RowNum -ne 0)) {
                 $Response = $Response | Where-Object { $_."Row Number" -eq $RowNum }
@@ -363,7 +397,7 @@ function ptcg()
             [string]$QUERY = "&gid=$($PAYMENTS_SHEET_GID)"
 
             Write-Debug "Request: $($MASTER_TRACKING_SHEET_URL)$($QUERY)"
-            $Response = Invoke-WebRequest -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv
+            $Response = Invoke-RestMethod -Uri "$($MASTER_TRACKING_SHEET_URL)$($QUERY)" | ConvertFrom-Csv
             $Response | Select-Object -Property "People with payment 1 week overdue" | Where-Object { $_."People with payment 1 week overdue"-match '\S' } | Format-Table -AutoSize -Wrap
         }
         {$_ -in "product", "p"} {
@@ -376,7 +410,7 @@ function ptcg()
             [char]$END_COLUMN
             $HEADERS = @("Product Name", "Price", "Status", "Allocation Due", "Street Date")
             switch($IP) {
-                { $_ -match "Pokemon" -or $_ -match "Pokémon" -or $_ -match "Poke" } {
+                "PK" {
                     $FULL_IP = "Pokémon"
                     $isPokemon = $true
                     $SHEET_URL = "https://docs.google.com/spreadsheets/d/1AnnzLYz1ktCLm0-Mt5o-6p4T8AqE0r2gewv-osqrK0A/export?format=csv"
@@ -412,7 +446,7 @@ function ptcg()
                         $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                     }
                 }
-                { $_ -match "Magic The Gathering" -or $_ -match "MTG" -or $_ -match "Magic"  } {
+                "MTG" {
                     $FULL_IP = "Magic The Gathering"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 419743007
@@ -440,7 +474,7 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Flesh & Blood" -or $_ -match "Flesh And Blood" -or $_ -match "FAB" } {
+                "FAB" {
                     $FULL_IP = "Flesh & Blood"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 1539072415
@@ -460,7 +494,7 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Grand Archive" -or $_ -match "GA" } {
+                "GA" {
                     $FULL_IP = "Grand Archive"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 1217038948
@@ -480,7 +514,7 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Lorcana" -or $_ -match "Lor" } {
+                "LOR" {
                     $FULL_IP = "Lorcana"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 613517122
@@ -500,7 +534,7 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)17:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Sorcery" -or $_ -match "Sorc" } {
+                "SCR" {
                     $FULL_IP = "Sorcery"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 80389347
@@ -520,7 +554,7 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Star Wars Unlimited" -or $_ -match "SWU" -or $_ -match "Star Wars" } {
+                "SWU" {
                     $FULL_IP = "Star Wars Unlimited"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 879393505
@@ -536,7 +570,7 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Weiss Schwarz" -or $_ -match "WS" -or $_ -match "Weiss" } {
+                "WS" {
                     $FULL_IP = "Weiss Schwarz"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 1882644453
@@ -560,7 +594,7 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Yu-Gi-Oh" -or $_ -match "YuGiOh" -or $_ -match "YGO" } {
+                "YGO" {
                     $FULL_IP = "Yu-Gi-Oh"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 103569003
@@ -592,7 +626,7 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { @("Bandai", "Dragon Ball Super", "DBS", "Dragon Ball", "Digimon", "Digi", "One Piece", "OP", "Union Arena", "UA", "Gundam", "GCG") -contains $_ }  {
+                { @("Bandai", "DB", "DM", "OP", "UA", "GCG") -contains $_ }  {
                     $FULL_IP = "Bandai"
                     $HEADERS += "Product Info"
                     Write-Debug "Getting $FULL_IP Product for Distro #$Distro"
@@ -617,7 +651,7 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)15:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "holoLive" -or $_ -match "HL" } {
+                "HL" {
                     $FULL_IP = "holoLive"
                     Write-Debug "Getting $FULL_IP Product"
                     $SHEET_GID = 941844023
@@ -641,10 +675,10 @@ function ptcg()
                     }
                     $SHEET_RANGE = "$($START_COLUMN)16:$($END_COLUMN)&tq=SELECT%20*"
                 }
-                { $_ -match "Item Request" -or $_ -match "Request" -or $_ -match "IR" } {
+                "IR" {
                     $SHEET_GID = 1689199249
                 }
-                { $_ -match "Supplies" -or $_ -match "Supply" } {
+                "Supplies" {
                     $SHEET_GID = 1234938269
                 }
                 default {
@@ -653,34 +687,34 @@ function ptcg()
                 }
             }
 
-            if (@("Dragon Ball Super", "DBS", "Digimon", "Digi", "One Piece", "OP", "Union Arena", "UA", "Gundam", "GCG") -match $IP) {
+            if (@("DBS", "DM", "OP", "UA", "GCG") -match $IP) {
                 Write-Debug "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)"
                 Write-Debug "Filtering Bandai Product"
                 switch($IP) {
-                    { $_ -match "Dragon Ball Super" -or $_ -match "DBS" -or $_ -match "Dragon Ball"} {
-                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Dragon Ball Super" }
+                    "DB" {
+                        $Response = Invoke-RestMethod -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Dragon Ball Super" }
                     }
-                    { $_ -match "Digimon" -or $_ -match "Digi" } {
-                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Digimon" }
+                    "DM" {
+                        $Response = Invoke-RestMethod -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Digimon" }
                     }
-                    { $_ -match "One Piece" -or $_ -match "OP" } {
-                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "One Piece" }
+                    "OP" {
+                        $Response = Invoke-RestMethod -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "One Piece" }
                     }
-                    { $_ -match "Union Arena" -or $_ -match "UA" } {
-                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Union Arena" }
+                    "UA" {
+                        $Response = Invoke-RestMethod -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Union Arena" }
                     }
-                    { $_ -match "Gundam" -or $_ -match "GCG" } {
-                        $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Gundam" }
+                    "GCG" {
+                        $Response = Invoke-RestMethod -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS | Where-Object { $_."Product Name" -match "Gundam" }
                     }
                 }
             }
             elseif (!$isPokemon) {
                 Write-Debug "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)"
-                $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS
+                $Response = Invoke-RestMethod -Uri "$($SHEET_URL)&gid=$($SHEET_GID)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS
             }
             else {
                 Write-Debug "$($SHEET_URL)&range=$($SHEET_RANGE)"
-                $Response = Invoke-WebRequest -Uri "$($SHEET_URL)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS
+                $Response = Invoke-RestMethod -Uri "$($SHEET_URL)&range=$($SHEET_RANGE)" | ConvertFrom-Csv -Header $HEADERS
             }
 
             $Response = $Response | Where-Object { ![string]::IsNullOrWhiteSpace($_."Product Name") }
@@ -722,20 +756,23 @@ function ptcg()
             Write-Host "    [`"orders`", `"o`"] - Get Master Tracking order info"
             Write-Host "        -Name <String> [Optional] [Alias: n]"
             Write-Host "            Specifies the discord member name to filter orders."
-            Write-Host "        -Status <String> [Optional] [Alias: s]"
+            Write-Host "        -Status <String> [Optional] [Alias: s] [Case-Insensitive]"
             Write-Host "            Filters orders based on their status. Valid values are:"
             Write-Host "            PLACED, ALLOCATING, INVOICING, PENDING PAYMENT, PAID, SHIPPING, SHIPPED"
             Write-Host "        -Product <String> [Optional] [Alias: p]"
             Write-Host "            Filters orders based on the product requested."
-            Write-Host "        -Distro <UInt16> [Optional] [Alias: d]"
+            Write-Host "        -Distro <UInt16> [Optional] [Alias: d] (0)"
             Write-Host "            Filters the product based on the distributor. Valid values are 1, 2, 3, 4, 5."
-            Write-Host "        -RowNum <UInt64> [Optional] [Alias: rn]"
+            Write-Host "        -RowNum <UInt64> [Optional] [Alias: rn] (0)"
             Write-Host "            Filters orders by the row number."
             Write-Host ""
 
             Write-Host "    [`"ranking`", `"rank`", `"r`"] - Get rankings"
             Write-Host "        -Name <String> [Optional] [Alias: n]"
             Write-Host "            Specifies the discord member name to filter rankings."
+            Write-Host "        -IP <String> [Optional] [Alias: i] [Case-Insensitive] (PK)"
+            Write-Host "            Filters the product based on its intellectual property (IP)."
+            Write-Host "            Valid IPs are  (`"PK`", `"MTG`", `"HL`", `"SCR`", `"GA`", `"SWU`", `"YGO`", `"LOR`", `"FAB`", `"DBS`", `"DM`", `"OP`", `"UA`", `"GCG`", `"IR`", `"Bandai`", `"Supplies`")"
             Write-Host "        -CaseAmount <UInt64> [Optional] [Alias: ca]"
             Write-Host "            The total amount of cases to determine estimated amount for a given user based off spend"
             Write-Host ""
@@ -743,7 +780,7 @@ function ptcg()
             Write-Host "    [`"payments`", `"pay`"] - Get payments info"
             Write-Host "        -Name <String> [Optional] [Alias: n]"
             Write-Host "            Specifies the discord member name to filter payments."
-            Write-Host "        -RowNum <UInt64> [Optional] [Alias: rn]"
+            Write-Host "        -RowNum <UInt64> [Optional] [Alias: rn] (0)"
             Write-Host "            Filters payments by the row number."
             Write-Host ""
 
@@ -751,9 +788,10 @@ function ptcg()
             Write-Host ""
 
             Write-Host "    [`"product`", `"p`"] - Get product information for a specific IP and distro"
-            Write-Host "        -IP <String> [Optional] [Alias: i]"
+            Write-Host "        -IP <String> [Optional] [Alias: i] [Case-Insensitive] (PK)"
             Write-Host "            Filters the product based on its intellectual property (IP)."
-            Write-Host "        -Distro <UInt16> [Optional] [Alias: d]"
+            Write-Host "            Valid IPs are  (`"PK`", `"MTG`", `"HL`", `"SCR`", `"GA`", `"SWU`", `"YGO`", `"LOR`", `"FAB`", `"DBS`", `"DM`", `"OP`", `"UA`", `"GCG`", `"IR`", `"Bandai`", `"Supplies`")"
+            Write-Host "        -Distro <UInt16> [Optional] [Alias: d] (0)"
             Write-Host "            Filters the product based on the distributor. Valid values are 1, 2, 3, 4, 5."
             Write-Host ""
 

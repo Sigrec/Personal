@@ -343,7 +343,7 @@ function ptcg()
                         $_.Rank = ++$rankCounter  # Assign the rank value to the existing Rank property
                         $_  # Return the modified object
                     } | 
-                    Out-GridView -Title "Rankings"
+                    Out-GridView -Title "$key Rankings"
             }
             else {
                 $Response| Format-Table -AutoSize -Wrap

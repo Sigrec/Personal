@@ -329,6 +329,9 @@ function ptcg()
                 if ($key -ne "Distro 5 Bandai") {
                     $OldSpend = [decimal]($_."Old Spend" -replace '[$,]', '') # Strip $ and commas
                 }
+                else {
+                    $OldSpend = 0
+                }
                 $UserTotalSpend = $SplitSpend + $OldSpend
 
                 $TotalSpend += ($SplitSpend + $OldSpend)

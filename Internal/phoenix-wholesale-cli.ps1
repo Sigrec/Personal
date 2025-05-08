@@ -1,4 +1,4 @@
-[string]$VERSION = "3.0.0"
+[string]$VERSION = "3.1.0"
 
 function ptcg()
 {
@@ -56,17 +56,25 @@ function ptcg()
 
             # Add other necessary tracking sheet URLs
             $allResponses = @(
-                "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_GID)",
-                "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_PREORDER_GID)",
-                "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_COMPLETE_GID)"
+                @{ Sheet = "Master";   Url = "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_GID)" },
+                @{ Sheet = "Preorder"; Url = "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_PREORDER_GID)" },
+                @{ Sheet = "Complete"; Url = "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_COMPLETE_GID)" }
             )
 
             # Step 1: Fetch content from all sheets in parallel
             # Fetch and parse each sheet in parallel
             $parsedSheets = $allResponses | ForEach-Object -Parallel {
                 try {
-                    Write-Debug $_
-                    $csvRows = Invoke-RestMethod -Uri $_ | ConvertFrom-Csv
+                    Write-Debug "Fetching: $($_.Sheet) from $($_.Url)"
+                    $csvRows = Invoke-RestMethod -Uri $_.Url | ConvertFrom-Csv
+
+                    # Find the first row with "#ERROR!" in "Row Number"
+                    $errorRow = $csvRows | Where-Object { $_."Row Number" -eq "#ERROR!" } | Select-Object -First 1
+
+                    if ($null -ne $errorRow) {
+                        Write-Warning "Sheet '$($_.Sheet)' is Erroring!`n"
+                    }
+
                     # Return both the rows and their headers
                     return @{
                         Rows    = $csvRows
@@ -91,7 +99,12 @@ function ptcg()
                             $headerTracker.Add($header)
                         }
                     }
-                    $allRows.AddRange($sheet.Rows)
+                    # Check if any row has "Row Number" == "#ERROR!"
+                    $hasError = $sheet.Rows | Where-Object { $_."Row Number" -eq "#ERROR!" }
+
+                    if (-not $hasError) {
+                        $allRows.AddRange($sheet.Rows)
+                    }
                 }
             }
 
@@ -312,13 +325,18 @@ function ptcg()
 
             [decimal]$TotalSpend = 0
             $Response = $Response | ForEach-Object {
-                $Spend = [decimal]($_.$key -replace '[$,]', '') # Strip $ and commas
-                $TotalSpend += $Spend
-                if ($key -eq "PK" -or $Spend -gt 0) {
+                $SplitSpend = [decimal]($_.$key -replace '[$,]', '') # Strip $ and commas
+                if ($key -ne "Distro 5 Bandai") {
+                    $OldSpend = [decimal]($_."Old Spend" -replace '[$,]', '') # Strip $ and commas
+                }
+                $UserTotalSpend = $SplitSpend + $OldSpend
+
+                $TotalSpend += ($SplitSpend + $OldSpend)
+                if ($key -eq "PK" -or $UserTotalSpend -gt 0) {
                     [PSCustomObject]@{
                         "Rank" = 0
                         "User Name" = $_."User Name"
-                        "Spend" = $_.$key
+                        "Spend" = "{0:C2}" -f $UserTotalSpend
                     }
                 }
             } | Where-Object { $_ -ne $null }

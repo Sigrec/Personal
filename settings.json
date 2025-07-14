@@ -1,0 +1,191 @@
+{
+    "$help": "https://aka.ms/terminal-documentation",
+    "$schema": "https://aka.ms/terminal-profiles-schema",
+    "actions": 
+    [
+        {
+            "command": 
+            {
+                "action": "copy",
+                "singleLine": false
+            },
+            "id": "User.copy.644BA8F2"
+        },
+        {
+            "command": "paste",
+            "id": "User.paste"
+        },
+        {
+            "command": "find",
+            "id": "User.find"
+        },
+        {
+            "command": 
+            {
+                "action": "splitPane",
+                "split": "auto",
+                "splitMode": "duplicate"
+            },
+            "id": "User.splitPane.A6751878"
+        }
+    ],
+    "alwaysOnTop": true,
+    "alwaysShowTabs": false,
+    "copyFormatting": "none",
+    "copyOnSelect": false,
+    "defaultProfile": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+    "keybindings": 
+    [
+        {
+            "id": "User.copy.644BA8F2",
+            "keys": "ctrl+c"
+        },
+        {
+            "id": "User.find",
+            "keys": "ctrl+shift+f"
+        },
+        {
+            "id": "User.paste",
+            "keys": "ctrl+v"
+        },
+        {
+            "id": "User.splitPane.A6751878",
+            "keys": "alt+shift+d"
+        }
+    ],
+    "language": "en-US",
+    "newTabMenu": 
+    [
+        {
+            "type": "remainingProfiles"
+        }
+    ],
+    "profiles": 
+    {
+        "defaults": 
+        {
+            "colorScheme": "Remedy Dark",
+            "elevate": true,
+            "font": 
+            {
+                "face": "CaskaydiaCove Nerd Font",
+                "weight": "medium"
+            },
+            "opacity": 100,
+            "scrollbarState": "visible",
+            "tabTitle": "Sean@Cerri",
+            "useAcrylic": true
+        },
+        "list": 
+        [
+            {
+                "colorScheme": "Remedy Dark",
+                "commandline": "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -nologo",
+                "elevate": true,
+                "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+                "hidden": false,
+                "name": "Windows PowerShell"
+            },
+            {
+                "colorScheme": "Remedy Dark",
+                "commandline": "%SystemRoot%\\System32\\cmd.exe",
+                "elevate": true,
+                "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
+                "hidden": false,
+                "name": "Command Prompt"
+            },
+            {
+                "elevate": false,
+                "guid": "{b453ae62-4e3d-5e58-b989-0a998ec441b8}",
+                "hidden": false,
+                "name": "Azure Cloud Shell",
+                "source": "Windows.Terminal.Azure"
+            },
+            {
+                "colorScheme": "Remedy Dark",
+                "elevate": true,
+                "guid": "{3ffbbc78-b465-57c4-895b-6f8470faf862}",
+                "hidden": false,
+                "name": "Developer Command Prompt for VS 2022",
+                "source": "Windows.Terminal.VisualStudio"
+            },
+            {
+                "colorScheme": "Remedy Dark",
+                "elevate": true,
+                "guid": "{6610a434-0d03-58cd-8bd5-ee6c23e6aeca}",
+                "hidden": false,
+                "name": "Developer PowerShell for VS 2022",
+                "source": "Windows.Terminal.VisualStudio"
+            },
+            {
+                "elevate": false,
+                "guid": "{16208362-94fc-5b1f-a491-5b2624d5ab56}",
+                "hidden": true,
+                "name": "Visual Studio Debug Console",
+                "source": "VSDebugConsole"
+            },
+            {
+                "commandline": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -nologo",
+                "guid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+                "hidden": false,
+                "name": "PowerShell",
+                "source": "Windows.Terminal.PowershellCore"
+            }
+        ]
+    },
+    "schemes": 
+    [
+        {
+            "background": "#786B60",
+            "black": "#0C0C0C",
+            "blue": "#0037DA",
+            "brightBlack": "#767676",
+            "brightBlue": "#3B78FF",
+            "brightCyan": "#61D6D6",
+            "brightGreen": "#16C60C",
+            "brightPurple": "#B4009E",
+            "brightRed": "#E74856",
+            "brightWhite": "#F2F2F2",
+            "brightYellow": "#F9F1A5",
+            "cursorColor": "#FFEC4E",
+            "cyan": "#3A96DD",
+            "foreground": "#12CCC8",
+            "green": "#13A10E",
+            "name": "Campbell (modified)",
+            "purple": "#881798",
+            "red": "#C50F1F",
+            "selectionBackground": "#FFFFFF",
+            "white": "#CCCCCC",
+            "yellow": "#C19C00"
+        },
+        {
+            "background": "#352B2A",
+            "black": "#282A2E",
+            "blue": "#5F819D",
+            "brightBlack": "#535961",
+            "brightBlue": "#81A2BE",
+            "brightCyan": "#8ABEB7",
+            "brightGreen": "#B5BD68",
+            "brightPurple": "#B294BB",
+            "brightRed": "#CC6666",
+            "brightWhite": "#EEEFEE",
+            "brightYellow": "#F0C674",
+            "cursorColor": "#F7E0B4",
+            "cyan": "#5E8D87",
+            "foreground": "#F7E0B4",
+            "green": "#8C9440",
+            "name": "Remedy Dark",
+            "purple": "#85678F",
+            "red": "#A54242",
+            "selectionBackground": "#F7E0B4",
+            "white": "#707880",
+            "yellow": "#DE935F"
+        }
+    ],
+    "showTabsInTitlebar": false,
+    "tabWidthMode": "titleLength",
+    "theme": "dark",
+    "themes": [],
+    "useAcrylicInTabRow": true,
+    "windowingBehavior": "useAnyExisting"
+}

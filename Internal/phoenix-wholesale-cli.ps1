@@ -45,21 +45,17 @@ function ptcg()
             [UInt64]$MASTER_TRACKING_SHEET_COMPLETE_GID = 2024850616
             [string]$GRID_VIEW_TITLE = "Order Info"
 
-            # Initialize the array of URLs
-            $allResponses = @()
-
-            # Conditionally add the CANCELLED tracking sheet URL
-            if (($Status -match "HIDE") -or (($null -ne $RowNum) -and ($RowNum -ne 0))) {
-                [UInt64]$CANCELLED_TRACKING_SHEET_COMPLETE_GID = 1639309719
-                $allResponses += "$($MASTER_TRACKING_SHEET_URL)&gid=$($CANCELLED_TRACKING_SHEET_COMPLETE_GID)"
-            }
-
             # Add other necessary tracking sheet URLs
             $allResponses = @(
                 @{ Sheet = "Master";   Url = "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_GID)" },
                 @{ Sheet = "Preorder"; Url = "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_PREORDER_GID)" },
                 @{ Sheet = "Complete"; Url = "$($MASTER_TRACKING_SHEET_URL)&gid=$($MASTER_TRACKING_SHEET_COMPLETE_GID)" }
             )
+
+            if (($Status -ieq "HIDE") -or (($null -ne $RowNum) -and ($RowNum -ne 0))) {
+                [UInt64]$CANCELLED_TRACKING_SHEET_COMPLETE_GID = 1639309719
+                $allResponses += @{ Sheet = "Cancelled";   Url = "$($MASTER_TRACKING_SHEET_URL)&gid=$($CANCELLED_TRACKING_SHEET_COMPLETE_GID)" }
+            }
 
             # Step 1: Fetch content from all sheets in parallel
             # Fetch and parse each sheet in parallel

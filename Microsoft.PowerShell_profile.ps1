@@ -5,6 +5,7 @@ oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/remedy_dark.omp.json" | Inv
 Import-Module -Name Terminal-Icons
 Import-Module posh-git
 Import-Module PSReadLine
+Import-Module z
 
 # Import local scripts
 Get-ChildItem -Path "$(Split-Path -Path $PROFILE)\Scripts\Internal" -Filter *.ps1 -Recurse | ForEach-Object { 
@@ -26,7 +27,7 @@ if ($host.Name -eq 'ConsoleHost')
 }
 
 # Command to kill browser instances
-Function kb([string]$Browser)
+function kb([string]$Browser)
 {
     $Browser = $Browser.ToLower()
     Switch($Browser)
@@ -36,6 +37,20 @@ Function kb([string]$Browser)
         default { Write-Error "Invalid browser" }
     }
 }
+
+function Get-ModifiedFilesSince {
+    [CmdletBinding()]
+    param (
+        [string]$Path = ".",
+        [datetime]$Since = (Get-Date).AddDays(-1),
+        [switch]$Recurse
+    )
+
+    Get-ChildItem -Path $Path -File -Recurse:$Recurse | Where-Object {
+        $_.LastWriteTime -ge $Since
+    } | Select-Object -ExpandProperty Name
+}
+
 # Import the Chocolatey Profile that contains the necessary code to enable
 # tab-completions to function for `choco`.
 # Be aware that if you are missing these lines from your profile, tab completion

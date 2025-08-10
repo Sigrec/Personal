@@ -1,5 +1,5 @@
 # Start OMP styling
-oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/remedy_dark.omp.json" | Invoke-Expression
+oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/wild_west_vibes.omp.json" | Invoke-Expression
 
 # Import modules
 Import-Module -Name Terminal-Icons

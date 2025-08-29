@@ -28,13 +28,6 @@
           "style": "plain"
         },
         {
-          "properties": { "cache_duration": "none" },
-          "template": "<#f7e0b4> ❚ </>\ue266 MEM {{ round .PhysicalPercentUsed .Precision }}% = {{ (div ((sub .PhysicalTotalMemory .PhysicalAvailableMemory)|float64) 1073741824.0) }}/{{ (div .PhysicalTotalMemory 1073741824.0) }}GB",
-          "foreground": "#81A2BE",
-          "type": "sysinfo",
-          "style": "plain"
-        },
-        {
           "type": "time",
           "style": "plain",
           "foreground": "#B294BB",

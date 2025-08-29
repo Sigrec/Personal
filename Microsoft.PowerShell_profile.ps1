@@ -1,5 +1,5 @@
 # Start OMP styling
-oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH/wild_west_vibes.omp.json" | Invoke-Expression
+oh-my-posh init pwsh --config "S:\Personal\Themes\wild_west_vibes.omp.json" | Invoke-Expression
 
 # Import modules
 Import-Module -Name Terminal-Icons
@@ -8,7 +8,7 @@ Import-Module PSReadLine
 Import-Module z
 
 # Import local scripts
-Get-ChildItem -Path "$(Split-Path -Path $PROFILE)\Scripts\Internal" -Filter *.ps1 -Recurse | ForEach-Object { 
+Get-ChildItem -Path "S:\Personal\Scripts" -Filter *.ps1 -Recurse | ForEach-Object { 
     . $_.FullName
 }
 
@@ -59,4 +59,26 @@ function Get-ModifiedFilesSince {
 $ChocolateyProfile = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
 if (Test-Path($ChocolateyProfile)) {
   Import-Module "$ChocolateyProfile"
+}
+
+function Resolve-RelativePath {
+    param (
+        [string]$Base,
+        [string]$Relative
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Base) -or [string]::IsNullOrWhiteSpace($Relative)) {
+        return $null
+    }
+
+    if ($Relative -like "*[\\/]*") {
+        $segments = $Relative -split '[\\/]' | Where-Object { $_ -ne '' }
+        foreach ($segment in $segments) {
+            $Base = Join-Path -Path $Base -ChildPath $segment
+        }
+        return $Base
+    } else {
+        # If no path separators, just join once
+        return Join-Path -Path $Base -ChildPath $Relative
+    }
 }

@@ -8,7 +8,7 @@
         {
           "properties": { "cache_duration": "none" },
           "template": "<#e1dfe5></>{{ .UserName }}@{{ .HostName }}",
-          "foreground": "#a25a63",
+          "foreground": "#EFAFA9",
           "type": "session",
           "style": "plain"
         },
@@ -28,13 +28,6 @@
           "style": "plain"
         },
         {
-          "properties": { "cache_duration": "none" },
-          "template": "<#e1dfe5> ❚ </>\ue266 MEM {{ round .PhysicalPercentUsed .Precision }}% = {{ (div ((sub .PhysicalTotalMemory .PhysicalAvailableMemory)|float64) 1073741824.0) }}/{{ (div .PhysicalTotalMemory 1073741824.0) }}GB",
-          "foreground": "#7790a8",
-          "type": "sysinfo",
-          "style": "plain"
-        },
-        {
           "type": "time",
           "style": "plain",
           "foreground": "#8d88b6",
@@ -47,7 +40,7 @@
         {
           "type": "kubectl",
           "style": "plain",
-          "foreground": "#918a9f",
+          "foreground": "#7790a8",
           "properties": {
             "parse_kubeconfig": true
           },
@@ -65,7 +58,7 @@
           "style": "plain",
           "foreground": "#918a9f",
           "properties": { "parse_kubeconfig": true },
-          "template": " \uf308 {{ .Context }}{{ if .Namespace }}::{{ .Namespace }}{{ end }}"
+          "template": "\uf308 {{ .Context }}{{ if .Namespace }}::{{ .Namespace }}{{ end }}"
         },
         {
           "type": "command",
@@ -88,7 +81,7 @@
       "segments": [
         {
           "properties": {
-            "branch_max_length": 25,
+            "branch_max_length": 1000,
             "cache_duration": "none",
             "fetch_stash_count": true,
             "fetch_status": true,
@@ -161,14 +154,14 @@
         {
           "properties": { "cache_duration": "none" },
           "template": "!",
-          "foreground": "#8d88b6",
+          "foreground": "#7790a8",
           "type": "root",
           "style": "plain"
         },
         {
           "properties": { "cache_duration": "none" },
           "template": "❯",
-          "foreground": "#8d88b6",
+          "foreground": "#7790a8",
           "type": "text",
           "style": "plain"
         }

@@ -94,7 +94,7 @@ function Git-Diff {
         $count = $keys.Count
 
         for ($i = 0; $i -lt $count; $i++) {
-            $key = ($count -gt 1 ? $keys[$i] : $keys)
+            $key = $keys[$i]
             $isLastChild = ($i -eq $count - 1)
             $pathParts = $key -split '[\\/]'
             $fullPath = Resolve-RelativePath -Base $ParentPath -Relative $key
@@ -109,7 +109,7 @@ function Git-Diff {
                 $simulatedPath = Resolve-RelativePath -Base $ParentPath -Relative $key
 
                 # Guess if it's a directory or file based on node count or extension
-                $isLikelyFolder = $Node[$key].Count -gt 0
+                $isLikelyFolder = $null -ne $Node[$key] -and $Node[$key].Count -gt 0
                 if ($isLikelyFolder) {
                     $fakeItem = [System.IO.DirectoryInfo]::new($simulatedPath)
                 } else {
@@ -143,9 +143,9 @@ function Git-Diff {
             }
 
             # Recurse in deleted mode
-            if ($DeletedMode -and $Node[$key] -ne $null -and $Node[$key].Count -gt 0) {
+            if ($null -ne $Node[$key] -and $Node[$key].Count -gt 0) {
                 $newIndent = $Indent + ($isLastChild ? "   " : "│  ")
-                Print-Tree -Node $Node[$key] -ParentPath $fullPath -Indent $newIndent -IsLast $isLastChild -DeletedMode:$true
+                Print-Tree -Node $Node[$key] -ParentPath $fullPath -Indent $newIndent -IsLast $isLastChild -DeletedMode:$DeletedMode
             }
         }
     }

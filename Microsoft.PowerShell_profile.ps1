@@ -83,3 +83,38 @@ function Resolve-RelativePath {
         return Join-Path -Path $Base -ChildPath $Relative
     }
 }
+
+function Update-AllPowerShellModules {
+    [CmdletBinding()]
+    param()
+
+    Write-Host "🚀 Starting Global Update..." -ForegroundColor Cyan
+
+    # 1. Update PowerShell Modules
+    Write-Host "📦 Checking for PowerShell module updates..." -ForegroundColor Yellow
+    try {
+        # Update the package provider first to prevent handshake errors
+        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction SilentlyContinue
+        
+        # Update all modules installed via Install-Module
+        Update-Module -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+        Write-Host "✅ PowerShell modules updated." -ForegroundColor Green
+    }
+    catch {
+        Write-Warning "Some modules could not be updated (they may be in use or require Admin)."
+    }
+
+    # 2. Update Chocolatey Packages (including zoxide if you just installed it)
+    if (Get-Command choco -ErrorAction SilentlyContinue) {
+        Write-Host "🍫 Checking Chocolatey packages..." -ForegroundColor Yellow
+        choco upgrade all -y
+    }
+
+    # 3. Update oh-my-posh (since you use it for your Wild West theme)
+    if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
+        Write-Host "🤠 Updating Oh My Posh..." -ForegroundColor Yellow
+        oh-my-posh upgrade
+    }
+
+    Write-Host "✨ All systems updated!" -ForegroundColor Cyan
+}

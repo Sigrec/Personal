@@ -118,3 +118,22 @@ function Update-AllPowerShellModules {
 
     Write-Host "✨ All systems updated!" -ForegroundColor Cyan
 }
+
+function Reload-Profile {
+    [CmdletBinding()]
+    param(
+        [switch]$Clear
+    )
+
+    Write-Host "🔄 Reloading PowerShell profile..." -ForegroundColor Cyan
+    
+    # Dot-source the profile
+    . $PROFILE
+
+    if ($Clear) {
+        Clear-Host
+    }
+}
+
+# Update the alias to ensure it points to the new logic
+Set-Alias -Name reload -Value Reload-Profile

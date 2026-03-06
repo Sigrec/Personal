@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh --version)",
+      "Bash(gh auth status)",
+      "Bash(where gh)",
+      "Bash(winget list GitHub.cli)",
+      "Bash(cmd /c \"where gh\")",
+      "Bash(cmd /c \"gh --version\")",
+      "Bash(cmd /c \"powershell -Command \"\"Get-Command gh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\"\"\")"
+    ]
+  }
+}

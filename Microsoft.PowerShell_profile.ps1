@@ -1,3 +1,8 @@
+# Set UTF-8 encoding for shell and external process I/O
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::InputEncoding  = [System.Text.Encoding]::UTF8
+$OutputEncoding           = [System.Text.Encoding]::UTF8
+
 # Start OMP styling
 oh-my-posh init pwsh --config "S:\Personal\Themes\wild_west_vibes.omp.json" | Invoke-Expression
 
@@ -116,6 +121,12 @@ function Update-AllPowerShellModules {
         oh-my-posh upgrade
     }
 
+    # 4. Update winget packages
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "📦 Checking winget packages..." -ForegroundColor Yellow
+        winget upgrade --all --silent --accept-package-agreements --accept-source-agreements
+    }
+
     Write-Host "✨ All systems updated!" -ForegroundColor Cyan
 }
 
@@ -137,3 +148,13 @@ function Reload-Profile {
 
 # Update the alias to ensure it points to the new logic
 Set-Alias -Name reload -Value Reload-Profile
+
+function Push-WpCode {
+    Set-Location "S:\TCG SaaS Platform\WholesaleProgramPlatform"
+    $Host.UI.RawUI.WindowTitle = "Code"
+}
+
+function Push-WpWiki {
+    Set-Location "S:\TCG SaaS Platform\WholesaleProgramPlatform.wiki"
+    $Host.UI.RawUI.WindowTitle = "Wiki"
+}

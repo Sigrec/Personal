@@ -1,27 +1,99 @@
-function Git-AddCommitPush {
+function Push-GitCommit {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true)] [string] $Title,
+        [string] $Title,
         [string] $Desc,
-        [Parameter(Mandatory = $true)] [string] $Branch
+        [Parameter(Mandatory = $true)] [string] $Branch,
+        [switch] $AI
     )
 
+    if (-not $AI -and -not $Title) {
+        Write-Host "Either -Title or -AI is required." -ForegroundColor Red
+        return
+    }
+
+    if ($AI -and -not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        Write-Warning "Claude Code CLI ('claude') not found in PATH."
+        if (-not $Title) { return }
+        $AI = $false
+    }
+
     git add -A
-    git commit -m $Title -m "$Desc"
+
+    if ($AI) {
+        Write-Host "Generating AI commit message..." -ForegroundColor Cyan
+        $stagedFiles = @(git diff --cached --name-only 2>$null) -join "`n"
+        $stagedDiff  = git diff --cached 2>$null | Out-String
+        if ($stagedDiff.Length -gt 8000) {
+            $stagedDiff = $stagedDiff.Substring(0, 8000) + "`n...(truncated)"
+        }
+
+        $repoRoot      = git rev-parse --show-toplevel 2>$null
+        $commitSkill   = if ($repoRoot) { Join-Path $repoRoot ".claude/skills/commit.md" } else { $null }
+        $commitConvs   = if ($commitSkill -and (Test-Path $commitSkill)) {
+            Write-Host "Using commit conventions from $commitSkill" -ForegroundColor DarkGray
+            "The following skill file defines the conventions for this repo — follow them exactly:`n`n$(Get-Content $commitSkill -Raw)"
+        } else {
+            "Follow conventional commits format (feat, fix, chore, docs, refactor, test).`nTitle max 72 chars, imperative mood, no trailing period."
+        }
+
+        $prompt = @"
+Generate a git commit message for these staged changes.
+
+Staged files:
+$stagedFiles
+
+Diff (may be truncated):
+$stagedDiff
+
+$commitConvs
+
+Respond in this exact format (no extra text):
+TITLE: <commit title>
+DESC: <optional 1-2 sentence description, or leave blank>
+"@
+
+        try {
+            $OutputEncoding = [System.Text.Encoding]::UTF8
+            $aiOutput = ($prompt | claude --print) -join "`n"
+            if ($LASTEXITCODE -eq 0 -and $aiOutput) {
+                if ($aiOutput -match "(?m)^TITLE:\s*(.+)$") { $Title = $Matches[1].Trim() }
+                if ($aiOutput -match "(?m)^DESC:\s*(.+)$")  { $Desc  = $Matches[1].Trim() }
+            } else {
+                Write-Warning "Claude returned no output."
+            }
+        } catch {
+            Write-Warning "AI call failed: $($_.Exception.Message)"
+        }
+
+        if (-not $Title) {
+            Write-Host "Could not generate commit title — aborting." -ForegroundColor Red
+            return
+        }
+
+        Write-Host "Title: $Title" -ForegroundColor Green
+        if ($Desc) { Write-Host "Desc:  $Desc" -ForegroundColor Gray }
+    }
+
+    if ($Desc) {
+        git commit -m $Title -m $Desc
+    } else {
+        git commit -m $Title
+    }
     git push origin $Branch
 }
 
-function Git-SyncBranch {
+function Sync-GitBranch {
     $branch = git rev-parse --abbrev-ref HEAD
     git pull origin $branch
     git push origin $branch
 }
 
-function Git-UndoLastCommit {
+function Undo-GitCommit {
     git reset --soft HEAD~1
 }
 
-function Git-AmendLastCommit {
+function Edit-GitCommit {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)] [string]$NewMessage
@@ -29,7 +101,7 @@ function Git-AmendLastCommit {
     git commit --amend -m "$NewMessage"
 }
 
-function Git-Diff {
+function Show-GitDiff {
     param (
         [string]$BasePath = $(git rev-parse --show-toplevel 2>$null)
     )
@@ -169,6 +241,182 @@ function Git-Diff {
     }
 }
 
-function Git-StatusTree {
+function Show-GitStatusTree {
     git log --oneline --graph --decorate --all
+}
+
+function New-GitPR {
+    [CmdletBinding()]
+    param (
+        [string]$Base = "master",
+        [switch]$AI,
+        [switch]$DryRun
+    )
+
+    $currentBranch = git rev-parse --abbrev-ref HEAD 2>$null
+    if (-not $currentBranch -or $currentBranch -eq $Base) {
+        Write-Host "Already on base branch '$Base'. Checkout a feature branch first." -ForegroundColor Red
+        return
+    }
+
+    # Gather commits since diverging from base — normalize to clean unique array
+    $rawCommits = @(git log "$Base...HEAD" --pretty=format:"%s" 2>$null)
+    $commitList = $rawCommits | Where-Object { $_ -ne "" } | ForEach-Object { $_.Trim() } | Select-Object -Unique
+    if ($commitList.Count -eq 0) {
+        Write-Host "No commits found between '$Base' and '$currentBranch'." -ForegroundColor Yellow
+        return
+    }
+
+    # Changed files and diff stat
+    $changedFiles = @(git diff "$Base...HEAD" --name-only 2>$null) | Where-Object { $_ -ne "" }
+    $diffStat = git diff "$Base...HEAD" --stat 2>$null | Select-Object -Last 1
+
+    # --- Derive fallback PR title from branch name ---
+    $titleFromBranch = $currentBranch -replace "^[^/]+/", ""
+    $titleFromBranch = $titleFromBranch -replace "^(feature|fix|chore|docs|refactor|test|hotfix)[/_-]", ""
+    $titleFromBranch = $titleFromBranch -replace "[_/-]", " "
+    $titleFromBranch = (Get-Culture).TextInfo.ToTitleCase($titleFromBranch.ToLower())
+
+    $prTitle = if ($commitList.Count -eq 1) { $commitList[0] } else { $titleFromBranch }
+
+    # --- Load skill file for PR conventions ---
+    $repoRoot  = git rev-parse --show-toplevel 2>$null
+    $skillFile = if ($repoRoot) { Join-Path $repoRoot ".claude/skills/pr.md" } else { $null }
+    $skillText = if ($skillFile -and (Test-Path $skillFile)) {
+        Write-Host "Using PR conventions from $skillFile" -ForegroundColor DarkGray
+        Get-Content $skillFile -Raw
+    } else { $null }
+
+    # --- Build PR body ---
+    if ($AI -and -not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        Write-Warning "Claude Code CLI ('claude') not found in PATH — falling back to basic body."
+        $AI = $false
+    }
+
+    if ($AI) {
+        Write-Host "Generating AI summary..." -ForegroundColor Cyan
+        $fullDiff = git diff "$Base...HEAD" 2>$null | Out-String
+        if ($fullDiff.Length -gt 12000) { $fullDiff = $fullDiff.Substring(0, 12000) + "`n...(truncated)" }
+
+        $conventionsBlock = if ($skillText) {
+            "The following skill file defines the conventions for this repo — follow them exactly:`n`n$skillText"
+        } else {
+            @"
+Title rules:
+- Title Case phrases joined by " + " (e.g. "Refactor Account Service + Add Integration Tests")
+- Imperative mood, no trailing period
+- Derived from commit messages, not branch name
+
+Body sections:
+## Summary
+(2-4 bullet points describing what changed and why)
+
+## Changes
+(bullet list of notable file/area changes)
+
+## Test Plan
+(bulleted checklist of how to verify this works — omit if purely docs/config)
+
+## Notes
+(caveats, breaking changes, follow-ups — omit if nothing relevant)
+"@
+        }
+
+        $prompt = @"
+You are writing a GitHub pull request title and description.
+Based on the information below, write a concise, professional PR title and body.
+
+Branch: $currentBranch -> $Base
+Commits:
+$($commitList -join "`n")
+
+Changed files:
+$($changedFiles -join "`n")
+
+Diff (may be truncated):
+$fullDiff
+
+$conventionsBlock
+
+Respond in this exact format (no extra text before TITLE):
+TITLE: <title>
+---
+<body markdown>
+"@
+
+        try {
+            $OutputEncoding = [System.Text.Encoding]::UTF8
+            $aiOutput = ($prompt | claude --print) -join "`n"
+            if ($LASTEXITCODE -eq 0 -and $aiOutput) {
+                if ($aiOutput -match "(?m)^TITLE:\s*(.+)$") { $prTitle = $Matches[1].Trim() }
+                $body = ($aiOutput -replace "(?s)^.*?^---\s*`n", "").Trim()
+                if (-not $body) {
+                    Write-Warning "Could not parse AI body — falling back to basic body."
+                    $AI = $false
+                }
+            } else {
+                Write-Warning "Claude returned no output — falling back to basic body."
+                $AI = $false
+            }
+        } catch {
+            Write-Warning "AI call failed: $($_.Exception.Message) — falling back to basic body."
+            $AI = $false
+        }
+    }
+
+    if (-not $AI) {
+        $commitLines = ($commitList | ForEach-Object { "- $_" }) -join "`n"
+        $fileLines   = ($changedFiles | Select-Object -First 20 | ForEach-Object { "- $_" }) -join "`n"
+        if ($changedFiles.Count -gt 20) { $fileLines += "`n- _(and more...)_" }
+
+        $body = @"
+## Summary
+
+$commitLines
+
+## Changes
+
+$fileLines
+
+$( if ($diffStat) { "**Diff:** $diffStat" } )
+"@
+    }
+
+    # --- Derive GitHub compare URL from remote ---
+    $remoteUrl = git remote get-url origin 2>$null
+    $repoPath  = $null
+    if ($remoteUrl -match "github\.com[:/](.+?)(?:\.git)?$") {
+        $repoPath = $Matches[1]
+    }
+
+    if ($DryRun) {
+        Write-Host "=== DRY RUN ===" -ForegroundColor Cyan
+        Write-Host "Title : $prTitle" -ForegroundColor Yellow
+        Write-Host "Base  : $Base <- $currentBranch" -ForegroundColor Yellow
+        Write-Host "Body:`n$body" -ForegroundColor Gray
+        if ($repoPath) {
+            Write-Host "URL   : https://github.com/$repoPath/compare/$Base...$currentBranch" -ForegroundColor DarkCyan
+        }
+        return
+    }
+
+    # Push branch if not already on remote
+    $remoteExists = git ls-remote --heads origin $currentBranch 2>$null
+    if (-not $remoteExists) {
+        Write-Host "Pushing '$currentBranch' to origin..." -ForegroundColor Cyan
+        git push -u origin $currentBranch
+    }
+
+    Write-Host "Title : $prTitle" -ForegroundColor Green
+    Write-Host "Body:`n$body" -ForegroundColor Gray
+
+    if ($repoPath) {
+        $encodedTitle = [Uri]::EscapeDataString($prTitle)
+        $encodedBody  = [Uri]::EscapeDataString($body)
+        $prUrl = "https://github.com/$repoPath/compare/$Base...$($currentBranch)?expand=1&title=$encodedTitle&body=$encodedBody"
+        Write-Host "Opening GitHub PR page in browser..." -ForegroundColor Cyan
+        Start-Process $prUrl
+    } else {
+        Write-Warning "Could not parse GitHub URL from remote '$remoteUrl'. Push complete — open GitHub manually."
+    }
 }

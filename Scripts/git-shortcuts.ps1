@@ -340,6 +340,7 @@ $conventionsBlock
 
 Respond in this exact format (no extra text before TITLE):
 TITLE: <title>
+LABELS: <comma-separated labels from the skill file>
 ---
 <body markdown>
 "@
@@ -348,9 +349,11 @@ TITLE: <title>
             $OutputEncoding = [System.Text.Encoding]::UTF8
             $aiOutput = ($prompt | claude --print) -join "`n"
             if ($LASTEXITCODE -eq 0 -and $aiOutput) {
-                if ($aiOutput -match "(?m)^TITLE:\s*(.+)$") { $prTitle = $Matches[1].Trim() }
-                $body = $aiOutput -replace "(?m)^TITLE:.*$\r?\n?", ""
-                $body = $body -replace "(?m)^---\s*$\r?\n?", ""
+                if ($aiOutput -match "(?m)^TITLE:\s*(.+)$")  { $prTitle   = $Matches[1].Trim() }
+                if ($aiOutput -match "(?m)^LABELS:\s*(.+)$") { $aiLabels  = $Matches[1].Trim() }
+                $body = $aiOutput -replace "(?m)^TITLE:.*$\r?\n?",  ""
+                $body = $body    -replace "(?m)^LABELS:.*$\r?\n?", ""
+                $body = $body    -replace "(?m)^---\s*$\r?\n?",     ""
                 $body = $body.Trim()
                 if (-not $body) {
                     Write-Warning "Could not parse AI body — falling back to basic body."
@@ -384,7 +387,7 @@ $( if ($diffStat) { "**Diff:** $diffStat" } )
 "@
     }
 
-    # --- Derive GitHub compare URL from remote ---
+    # --- Derive GitHub repo path from remote ---
     $remoteUrl = git remote get-url origin 2>$null
     $repoPath  = $null
     if ($remoteUrl -match "github\.com[:/](.+?)(?:\.git)?$") {
@@ -393,11 +396,12 @@ $( if ($diffStat) { "**Diff:** $diffStat" } )
 
     if ($DryRun) {
         Write-Host "=== DRY RUN ===" -ForegroundColor Cyan
-        Write-Host "Title : $prTitle" -ForegroundColor Yellow
-        Write-Host "Base  : $Base <- $currentBranch" -ForegroundColor Yellow
+        Write-Host "Title  : $prTitle" -ForegroundColor Yellow
+        Write-Host "Base   : $Base <- $currentBranch" -ForegroundColor Yellow
+        if ($aiLabels) { Write-Host "Labels : $aiLabels" -ForegroundColor Yellow }
         Write-Host "Body:`n$body" -ForegroundColor Gray
         if ($repoPath) {
-            Write-Host "URL   : https://github.com/$repoPath/compare/$Base...$currentBranch" -ForegroundColor DarkCyan
+            Write-Host "URL    : https://github.com/$repoPath/compare/$Base...$currentBranch" -ForegroundColor DarkCyan
         }
         return
     }
@@ -409,8 +413,8 @@ $( if ($diffStat) { "**Diff:** $diffStat" } )
         git push -u origin $currentBranch
     }
 
-    Write-Host "Title : $prTitle" -ForegroundColor Green
-    Write-Host "Body:`n$body" -ForegroundColor Gray
+    Write-Host "Title  : $prTitle" -ForegroundColor Green
+    if ($aiLabels) { Write-Host "Labels : $aiLabels" -ForegroundColor Cyan }
 
     if ($repoPath) {
         $encodedTitle = [Uri]::EscapeDataString($prTitle)

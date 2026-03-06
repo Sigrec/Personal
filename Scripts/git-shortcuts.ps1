@@ -349,7 +349,9 @@ TITLE: <title>
             $aiOutput = ($prompt | claude --print) -join "`n"
             if ($LASTEXITCODE -eq 0 -and $aiOutput) {
                 if ($aiOutput -match "(?m)^TITLE:\s*(.+)$") { $prTitle = $Matches[1].Trim() }
-                $body = ($aiOutput -replace "(?s)^.*?^---\s*`n", "").Trim()
+                $body = $aiOutput -replace "(?m)^TITLE:.*$\r?\n?", ""
+                $body = $body -replace "(?m)^---\s*$\r?\n?", ""
+                $body = $body.Trim()
                 if (-not $body) {
                     Write-Warning "Could not parse AI body — falling back to basic body."
                     $AI = $false

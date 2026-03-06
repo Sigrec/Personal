@@ -3,9 +3,14 @@ function Push-GitCommit {
     param (
         [string] $Title,
         [string] $Desc,
-        [Parameter(Mandatory = $true)] [string] $Branch,
         [switch] $AI
     )
+
+    $Branch = git rev-parse --abbrev-ref HEAD 2>$null
+    if (-not $Branch) {
+        Write-Host "Not inside a git repository." -ForegroundColor Red
+        return
+    }
 
     if (-not $AI -and -not $Title) {
         Write-Host "Either -Title or -AI is required." -ForegroundColor Red

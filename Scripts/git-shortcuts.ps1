@@ -250,7 +250,7 @@ function Show-GitStatusTree {
     git log --oneline --graph --decorate --all
 }
 
-function New-GitPR {
+function Git-PR {
     [CmdletBinding()]
     param (
         [string]$Base = "master",
@@ -399,13 +399,29 @@ $( if ($diffStat) { "**Diff:** $diffStat" } )
         $repoPath = $Matches[1]
     }
 
+    # --- Check for existing PR on this branch ---
+    $hasGh       = [bool](Get-Command gh -ErrorAction SilentlyContinue)
+    $existingPr  = $null
+    $existingUrl = $null
+    if ($hasGh) {
+        $prJson = gh pr view --json number,url 2>$null
+        if ($LASTEXITCODE -eq 0 -and $prJson) {
+            $existingPr  = ($prJson | ConvertFrom-Json).number
+            $existingUrl = ($prJson | ConvertFrom-Json).url
+        }
+    }
+
     if ($DryRun) {
         Write-Host "=== DRY RUN ===" -ForegroundColor Cyan
-        Write-Host "Title  : $prTitle" -ForegroundColor Yellow
-        Write-Host "Base   : $Base <- $currentBranch" -ForegroundColor Yellow
-        if ($aiLabels) { Write-Host "Labels : $aiLabels" -ForegroundColor Yellow }
+        Write-Host "Title    : $prTitle" -ForegroundColor Yellow
+        Write-Host "Base     : $Base <- $currentBranch" -ForegroundColor Yellow
+        Write-Host "Assignee : @me" -ForegroundColor Yellow
+        if ($aiLabels) { Write-Host "Labels   : $aiLabels" -ForegroundColor Yellow }
         Write-Host "Body:`n$body" -ForegroundColor Gray
-        if ($repoPath) {
+        if ($existingPr) {
+            Write-Host "Action : UPDATE existing PR #$existingPr ($existingUrl)" -ForegroundColor DarkCyan
+        } elseif ($repoPath) {
+            Write-Host "Action : CREATE new PR" -ForegroundColor DarkCyan
             Write-Host "URL    : https://github.com/$repoPath/compare/$Base...$currentBranch" -ForegroundColor DarkCyan
         }
         return
@@ -421,7 +437,36 @@ $( if ($diffStat) { "**Diff:** $diffStat" } )
     Write-Host "Title  : $prTitle" -ForegroundColor Green
     if ($aiLabels) { Write-Host "Labels : $aiLabels" -ForegroundColor Cyan }
 
-    if ($repoPath) {
+    if ($existingPr) {
+        # Update existing PR via gh then open it
+        Write-Host "Updating PR #$existingPr..." -ForegroundColor Cyan
+        $editArgs = @("pr", "edit", $existingPr, "--title", $prTitle, "--body", $body, "--add-assignee", "@me")
+        if ($aiLabels) { $editArgs += @("--label", $aiLabels) }
+        gh @editArgs
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "PR #$existingPr updated: $existingUrl" -ForegroundColor Green
+            Start-Process $existingUrl
+        } else {
+            Write-Warning "gh pr edit failed. Open the PR manually: $existingUrl"
+        }
+    } elseif ($hasGh) {
+        # Create via gh so labels and assignee are applied immediately, then open it
+        Write-Host "Creating PR via gh..." -ForegroundColor Cyan
+        $ghArgs = @("pr", "create", "--base", $Base, "--title", $prTitle, "--body", $body, "--assignee", "@me")
+        if ($aiLabels) { $ghArgs += @("--label", $aiLabels) }
+        $newPrUrl = gh @ghArgs 2>&1 | Select-Object -Last 1
+        if ($LASTEXITCODE -eq 0 -and $newPrUrl -match "^https://") {
+            Write-Host "PR created: $newPrUrl" -ForegroundColor Green
+            Start-Process $newPrUrl
+        } else {
+            Write-Warning "gh pr create failed — falling back to browser."
+            if ($repoPath) {
+                $encodedTitle = [Uri]::EscapeDataString($prTitle)
+                $encodedBody  = [Uri]::EscapeDataString($body)
+                Start-Process "https://github.com/$repoPath/compare/$Base...$($currentBranch)?expand=1&title=$encodedTitle&body=$encodedBody"
+            }
+        }
+    } elseif ($repoPath) {
         $encodedTitle = [Uri]::EscapeDataString($prTitle)
         $encodedBody  = [Uri]::EscapeDataString($body)
         $prUrl = "https://github.com/$repoPath/compare/$Base...$($currentBranch)?expand=1&title=$encodedTitle&body=$encodedBody"

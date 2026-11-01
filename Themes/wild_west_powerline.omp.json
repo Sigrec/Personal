@@ -53,7 +53,7 @@
           "powerline_symbol": "",
           "background": "#708b91",
           "foreground": "#1e1b24",
-          "template": " {{ if .Running }} {{ end }} ",
+          "template": " Aspire {{ if .Running }}▶{{ else }}■{{ end }} ",
           "properties": {
             "fetch_running": true,
             "cache_duration": "10s"
@@ -109,7 +109,8 @@
           "foreground": "#708b91",
           "template": "  {{ .FormattedMs }} ",
           "properties": {
-            "threshold": 2000
+            "always_enabled": true,
+            "threshold": 0
           }
         },
         {
@@ -117,6 +118,12 @@
           "style": "plain",
           "foreground": "#a25a63",
           "template": "  {{ reason .Code }} "
+        },
+        {
+          "type": "time",
+          "style": "plain",
+          "foreground": "#8d88b6",
+          "template": " {{ .CurrentDate | date \"15:04\" }} "
         }
       ]
     },

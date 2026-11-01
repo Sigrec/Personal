@@ -1,0 +1,117 @@
+-- WezTerm config, ported from the live Windows Terminal settings
+-- (Wild West Vibes scheme, CaskaydiaCove Nerd Font, same shortcuts).
+-- ~/.wezterm.lua loads this file, so edit it here and the repo stays the source.
+local wezterm = require 'wezterm'
+local act = wezterm.action
+local config = wezterm.config_builder()
+
+-- Shell: PowerShell 7 without the banner. PowerShell is the Store (MSIX) install,
+-- so there is no pwsh.exe under Program Files; resolve it through PATH instead.
+config.default_prog = { 'pwsh.exe', '-NoLogo' }
+
+-- Font
+-- The installed family has no Medium file, and WezTerm's renderer draws thinner
+-- than Windows Terminal's, so Regular looks light. DemiBold maps to the SemiBold
+-- file; drop back to 'Regular' if it feels too heavy.
+config.font = wezterm.font('CaskaydiaCove Nerd Font', { weight = 'DemiBold' })
+config.font_size = 10.0
+
+-- Colors: Wild West Vibes (the same scheme the powerline prompt is built on)
+local background = '#1D1A23'
+local foreground = '#E1DFE5'
+
+config.colors = {
+  foreground = foreground,
+  background = background,
+  cursor_bg = '#ABA6B6',
+  cursor_fg = background,
+  cursor_border = '#ABA6B6',
+  selection_bg = '#564F64',
+  selection_fg = foreground,
+  scrollbar_thumb = '#564F64',
+  ansi = {
+    '#1D1A23', -- black
+    '#A25A63', -- red
+    '#708B91', -- green
+    '#BFA481', -- yellow
+    '#7790A8', -- blue
+    '#8D88B6', -- purple
+    '#2C8585', -- cyan
+    '#918A9F', -- white
+  },
+  brights = {
+    '#898098',
+    '#E16F6F',
+    '#6BC46D',
+    '#F0BF5E',
+    '#6C9EDD',
+    '#A48ADE',
+    '#4EB1B1',
+    '#E1DFE5',
+  },
+  -- Tab bar uses the powerline prompt palette
+  tab_bar = {
+    background = '#15121a',
+    active_tab = { bg_color = '#bfa481', fg_color = '#1e1b24' },
+    inactive_tab = { bg_color = background, fg_color = '#918A9F' },
+    inactive_tab_hover = { bg_color = '#2a2533', fg_color = foreground },
+    new_tab = { bg_color = background, fg_color = '#918A9F' },
+    new_tab_hover = { bg_color = '#2a2533', fg_color = foreground },
+  },
+}
+
+-- Window
+config.window_background_opacity = 1.0
+config.window_padding = { left = 8, right = 8, top = 4, bottom = 4 }
+config.enable_scroll_bar = true
+config.scrollback_lines = 10000
+config.default_cursor_style = 'BlinkingBar'
+
+-- Tabs: hidden until there is more than one, like alwaysShowTabs = false
+config.use_fancy_tab_bar = false
+config.hide_tab_bar_if_only_one_tab = true
+config.tab_bar_at_bottom = false
+
+-- winget updates WezTerm (see upall), so skip its own update check
+config.check_for_updates = false
+
+-- Split along the longer side, like Windows Terminal's "auto" split.
+-- A character cell is about twice as tall as it is wide.
+local function split_auto(window, pane)
+  local dims = pane:get_dimensions()
+  local direction = dims.cols > dims.viewport_rows * 2 and 'Right' or 'Down'
+  window:perform_action(act.SplitPane { direction = direction }, pane)
+end
+
+-- Ctrl+C copies when text is selected, otherwise it is the interrupt key
+local function copy_or_interrupt(window, pane)
+  if window:get_selection_text_for_pane(pane) ~= '' then
+    window:perform_action(act.CopyTo 'ClipboardAndPrimarySelection', pane)
+    window:perform_action(act.ClearSelection, pane)
+  else
+    window:perform_action(act.SendKey { key = 'c', mods = 'CTRL' }, pane)
+  end
+end
+
+config.keys = {
+  { key = 'c', mods = 'CTRL', action = wezterm.action_callback(copy_or_interrupt) },
+  { key = 'v', mods = 'CTRL', action = act.PasteFrom 'Clipboard' },
+  { key = 'f', mods = 'CTRL|SHIFT', action = act.Search 'CurrentSelectionOrEmptyString' },
+
+  -- Panes (same shortcuts as Windows Terminal)
+  { key = 'd', mods = 'ALT|SHIFT', action = wezterm.action_callback(split_auto) },
+  { key = 'phys:Minus', mods = 'ALT|SHIFT', action = act.SplitPane { direction = 'Down' } },
+  { key = 'phys:Equal', mods = 'ALT|SHIFT', action = act.SplitPane { direction = 'Right' } },
+  -- Alt+Shift+arrows open a new pane on that side of the current one
+  { key = 'UpArrow', mods = 'ALT|SHIFT', action = act.SplitPane { direction = 'Up' } },
+  { key = 'DownArrow', mods = 'ALT|SHIFT', action = act.SplitPane { direction = 'Down' } },
+  { key = 'LeftArrow', mods = 'ALT|SHIFT', action = act.SplitPane { direction = 'Left' } },
+  { key = 'RightArrow', mods = 'ALT|SHIFT', action = act.SplitPane { direction = 'Right' } },
+  { key = 'w', mods = 'CTRL|SHIFT', action = act.CloseCurrentPane { confirm = false } },
+  { key = 'LeftArrow', mods = 'ALT', action = act.ActivatePaneDirection 'Left' },
+  { key = 'RightArrow', mods = 'ALT', action = act.ActivatePaneDirection 'Right' },
+  { key = 'UpArrow', mods = 'ALT', action = act.ActivatePaneDirection 'Up' },
+  { key = 'DownArrow', mods = 'ALT', action = act.ActivatePaneDirection 'Down' },
+}
+
+return config

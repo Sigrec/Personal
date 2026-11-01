@@ -1,6 +1,6 @@
 # Personal PowerShell setup
 
-My PowerShell 7 profile, helper scripts and Oh My Posh themes.
+My PowerShell 7 profile, helper scripts, Oh My Posh themes and WezTerm config.
 
 | Path | What it is |
 |------|------------|
@@ -8,7 +8,8 @@ My PowerShell 7 profile, helper scripts and Oh My Posh themes.
 | `Scripts/` | Helper scripts; every `*.ps1` here is dot-sourced by the profile |
 | `Themes/` | Oh My Posh themes (`wild_west_powerline.omp.json` is the active one; `wild_west_vibes` is the old plain prompt) |
 | `fastfetch/` | fastfetch config and the ASCII logos (`options/2_triskele.txt` is active; the others are spares) |
-| `settings.json` | Terminal settings |
+| `wezterm/wezterm.lua` | WezTerm config, my main terminal (see [WezTerm](#wezterm)); `~/.wezterm.lua` loads it |
+| `settings.json` | Windows Terminal settings, kept as a fallback (the live copy is under `%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState`) |
 
 ## Scripts
 
@@ -26,6 +27,54 @@ its short aliases.
 | `git-shortcuts.ps1` | `Push-GitCommit` (`gcp`), `Sync-GitBranch` (`gsync`), `Undo-GitCommit` (`gundo`), `Edit-GitCommit` (`gamend`), `Show-GitDiff` (`gdiff`), `Show-GitGraph` (`glg`), `New-GitPR` (`gpr`) |
 | `command-index.ps1` | `Get-MyCommand` (`cmds`) |
 
+## WezTerm
+
+WezTerm is my main terminal. It feels much faster than Windows Terminal and
+runs the same profile, Oh My Posh theme and fastfetch. Windows Terminal stays
+installed as a fallback and for elevated (admin) shells.
+
+`wezterm/wezterm.lua` holds the config. WezTerm only reads `~/.wezterm.lua`, so
+that file is a small stub that loads the one in this repo. Edit the repo copy
+and WezTerm reloads it on save.
+
+What the config sets:
+
+- **Shell:** `pwsh.exe -NoLogo`, found through PATH. PowerShell is the Store
+  install, so there is no `C:\Program Files\PowerShell\7\pwsh.exe`.
+- **Font:** CaskaydiaCove Nerd Font, size 10, `DemiBold`. WezTerm draws text
+  thinner than Windows Terminal; switch to `Regular` if it looks too heavy.
+- **Colors:** Wild West Vibes, the scheme the powerline prompt is built on.
+- **Tabs:** the tab bar stays hidden until there is a second tab.
+- **Not ported:** always on top (use PowerToys), acrylic and the fixed
+  `Sean@Cerri` tab title.
+
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+C | Copy when text is selected, otherwise interrupt |
+| Ctrl+V | Paste |
+| Ctrl+Shift+F | Search |
+| Alt+Shift+D | Split along the longer side |
+| Alt+Shift+Arrows | Open a new pane above, below, left or right |
+| Alt+Shift+- / Alt+Shift++ | Split below / split right |
+| Alt+Arrows | Move between panes |
+| Ctrl+Shift+W | Close the current pane (no confirmation) |
+
+Setup on a new machine: install WezTerm and the CaskaydiaCove Nerd Font
+(from nerdfonts.com), then create the stub:
+
+```powershell
+winget install wez.wezterm
+
+@'
+local wezterm = require 'wezterm'
+local path = 'S:\\Personal\\wezterm\\wezterm.lua'
+wezterm.add_to_config_reload_watch_list(path)
+return dofile(path)
+'@ | Set-Content "$HOME\.wezterm.lua"
+```
+
+WezTerm updates through winget, so its own update check is off in the config.
+
 ## Setup on a new machine
 
 Install the tools:
@@ -35,6 +84,8 @@ winget install JanDeDobbeleer.OhMyPosh
 winget install ajeetdsouza.zoxide
 winget install junegunn.fzf
 ```
+
+For the terminal itself, follow [WezTerm](#wezterm) above.
 
 Install the PowerShell modules:
 

@@ -1,4 +1,32 @@
 function Push-GitCommit {
+    <#
+    .SYNOPSIS
+    Stages everything, commits and pushes the current branch.
+
+    .DESCRIPTION
+    Runs git add -A, commits with the given title (and optional description),
+    then pushes to origin. With -AI, Claude Code writes the title and
+    description from the staged diff, following .claude/skills/commit.md in the
+    repo when that file exists.
+
+    .PARAMETER Title
+    Commit title. Required unless -AI is used.
+
+    .PARAMETER Desc
+    Optional commit description.
+
+    .PARAMETER AI
+    Generate the title and description with the Claude Code CLI.
+
+    .EXAMPLE
+    gcp 'fix: handle empty cart'
+
+    .EXAMPLE
+    gcp -AI
+
+    .NOTES
+    Alias: gcp
+    #>
     [CmdletBinding()]
     param (
         [string] $Title,
@@ -29,6 +57,12 @@ function Push-GitCommit {
         Write-Host "Generating AI commit message..." -ForegroundColor Cyan
         $stagedFiles = @(git diff --cached --name-only 2>$null) -join "`n"
         $stagedDiff  = git diff --cached 2>$null | Out-String
+
+        if (-not $stagedFiles -and -not $stagedDiff.Trim()) {
+            Write-Host "Nothing to commit — no staged changes found after 'git add -A'." -ForegroundColor Red
+            return
+        }
+
         if ($stagedDiff.Length -gt 8000) {
             $stagedDiff = $stagedDiff.Substring(0, 8000) + "`n...(truncated)"
         }
@@ -58,21 +92,30 @@ TITLE: <commit title>
 DESC: <optional 1-2 sentence description, or leave blank>
 "@
 
+        $aiOutput = $null
         try {
             $OutputEncoding = [System.Text.Encoding]::UTF8
             $aiOutput = ($prompt | claude --print) -join "`n"
-            if ($LASTEXITCODE -eq 0 -and $aiOutput) {
-                if ($aiOutput -match "(?m)^TITLE:\s*(.+)$") { $Title = $Matches[1].Trim() }
-                if ($aiOutput -match "(?m)^DESC:\s*(.+)$")  { $Desc  = $Matches[1].Trim() }
-            } else {
-                Write-Warning "Claude returned no output."
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Claude CLI exited with code $LASTEXITCODE — aborting." -ForegroundColor Red
+                if ($aiOutput) { Write-Host "Output: $aiOutput" -ForegroundColor Gray }
+                return
             }
+            if (-not $aiOutput) {
+                Write-Host "Claude returned empty output — aborting." -ForegroundColor Red
+                return
+            }
+            if ($aiOutput -match "(?m)^TITLE:\s*(.+)$") { $Title = $Matches[1].Trim() }
+            if ($aiOutput -match "(?m)^DESC:\s*(.+)$")  { $Desc  = $Matches[1].Trim() }
         } catch {
-            Write-Warning "AI call failed: $($_.Exception.Message)"
+            Write-Host "Claude CLI call failed: $($_.Exception.Message) — aborting." -ForegroundColor Red
+            return
         }
 
         if (-not $Title) {
-            Write-Host "Could not generate commit title — aborting." -ForegroundColor Red
+            Write-Host "Could not parse 'TITLE:' from Claude output — aborting." -ForegroundColor Red
+            Write-Host "Raw output:" -ForegroundColor Yellow
+            Write-Host $aiOutput -ForegroundColor Gray
             return
         }
 
@@ -89,24 +132,90 @@ DESC: <optional 1-2 sentence description, or leave blank>
 }
 
 function Sync-GitBranch {
+    <#
+    .SYNOPSIS
+    Pulls then pushes the current branch against origin.
+
+    .EXAMPLE
+    gsync
+
+    .NOTES
+    Alias: gsync
+    #>
+    [CmdletBinding()]
+    param ()
+
     $branch = git rev-parse --abbrev-ref HEAD
     git pull origin $branch
     git push origin $branch
 }
 
 function Undo-GitCommit {
-    git reset --soft HEAD~1
+    <#
+    .SYNOPSIS
+    Undoes the last commit but keeps its changes staged.
+
+    .DESCRIPTION
+    Runs git reset --soft HEAD~1, so nothing is lost; the files stay staged.
+
+    .EXAMPLE
+    gundo
+
+    .NOTES
+    Alias: gundo
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param ()
+
+    if ($PSCmdlet.ShouldProcess('HEAD', 'Undo last commit (soft reset)')) {
+        git reset --soft HEAD~1
+    }
 }
 
 function Edit-GitCommit {
-    [CmdletBinding()]
+    <#
+    .SYNOPSIS
+    Rewrites the message of the last commit.
+
+    .PARAMETER NewMessage
+    The replacement commit message.
+
+    .EXAMPLE
+    gamend 'feat: add batch tracking'
+
+    .NOTES
+    Alias: gamend
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
     param (
-        [Parameter(Mandatory = $true)] [string]$NewMessage
+        [Parameter(Mandatory, Position = 0)]
+        [ValidateNotNullOrEmpty()]
+        [string]$NewMessage
     )
-    git commit --amend -m "$NewMessage"
+    if ($PSCmdlet.ShouldProcess('HEAD', "Amend commit message to '$NewMessage'")) {
+        git commit --amend -m $NewMessage
+    }
 }
 
 function Show-GitDiff {
+    <#
+    .SYNOPSIS
+    Shows changed, staged, untracked and deleted files as an icon tree.
+
+    .DESCRIPTION
+    Builds a tree from git's changed, staged and untracked paths, and a
+    separate red tree for deleted files. Uses Terminal-Icons for the icons.
+
+    .PARAMETER BasePath
+    Repo root to resolve paths against. Defaults to the current repo root.
+
+    .EXAMPLE
+    gdiff
+
+    .NOTES
+    Alias: gdiff
+    #>
+    [CmdletBinding()]
     param (
         [string]$BasePath = $(git rev-parse --show-toplevel 2>$null)
     )
@@ -158,7 +267,7 @@ function Show-GitDiff {
         return $tree
     }
 
-    function Print-Tree {
+    function Write-TreeNode {
         param (
             [hashtable]$Node,
             [string]$ParentPath,
@@ -167,7 +276,8 @@ function Show-GitDiff {
             [bool]$DeletedMode = $false
         )
 
-        $keys = $Node.Keys | Sort-Object
+        # @() keeps a single child as a one-item array (a bare string would index to its first letter)
+        $keys = @($Node.Keys | Sort-Object)
         $count = $keys.Count
 
         for ($i = 0; $i -lt $count; $i++) {
@@ -214,15 +324,14 @@ function Show-GitDiff {
 
                 if ($item.PSIsContainer -and $Node[$key] -ne $null -and $Node[$key].Count -gt 0) {
                     $newIndent = $Indent + ($isLastChild ? "   " : "│  ")
-                    $test = $Node[$key]
-                    Print-Tree -Node $Node[$key] -ParentPath $fullPath -Indent $newIndent -IsLast $isLastChild -DeletedMode:$false
+                    Write-TreeNode -Node $Node[$key] -ParentPath $fullPath -Indent $newIndent -IsLast $isLastChild -DeletedMode:$false
                 }
             }
 
-            # Recurse in deleted mode
-            if ($null -ne $Node[$key] -and $Node[$key].Count -gt 0) {
+            # Existing paths recurse above (only real folders); deleted paths recurse here
+            if ($DeletedMode -and $null -ne $Node[$key] -and $Node[$key].Count -gt 0) {
                 $newIndent = $Indent + ($isLastChild ? "   " : "│  ")
-                Print-Tree -Node $Node[$key] -ParentPath $fullPath -Indent $newIndent -IsLast $isLastChild -DeletedMode:$DeletedMode
+                Write-TreeNode -Node $Node[$key] -ParentPath $fullPath -Indent $newIndent -IsLast $isLastChild -DeletedMode:$DeletedMode
             }
         }
     }
@@ -230,14 +339,14 @@ function Show-GitDiff {
     if ($existingPaths.Count -gt 0) {
         Write-Host "📂 Changed/Staged/Untracked Files" -ForegroundColor Cyan
         $existingTree = Build-TreeFromPaths -Paths $existingPaths
-        Print-Tree -Node $existingTree -ParentPath $BasePath -DeletedMode:$false
+        Write-TreeNode -Node $existingTree -ParentPath $BasePath -DeletedMode:$false
         Write-Host "`n"
     }
 
     if ($deletedPaths.Count -gt 0) {
         Write-Host "🗑️ Deleted Files" -ForegroundColor Magenta
         $deletedTree = Build-TreeFromPaths -Paths $deletedPaths
-        Print-Tree -Node $deletedTree -ParentPath $BasePath -DeletedMode:$true
+        Write-TreeNode -Node $deletedTree -ParentPath $BasePath -DeletedMode:$true
         Write-Host "`n"
     }
 
@@ -246,15 +355,53 @@ function Show-GitDiff {
     }
 }
 
-function Show-GitStatusTree {
+function Show-GitGraph {
+    <#
+    .SYNOPSIS
+    Shows the commit history of all branches as a decorated graph.
+
+    .EXAMPLE
+    glg
+
+    .NOTES
+    Alias: glg
+    #>
+    [CmdletBinding()]
+    param ()
+
     git log --oneline --graph --decorate --all
 }
 
-function Git-PR {
+function New-GitPR {
+    <#
+    .SYNOPSIS
+    Creates or updates a GitHub pull request with an AI-written title and body.
+
+    .DESCRIPTION
+    Collects the commits and diff against the base branch, detects linked
+    issues from commits and the branch name, then has the Claude Code CLI write
+    the title, labels and body (following .claude/skills/pr.md when present).
+    Creates the PR through gh, or updates the existing one for the branch.
+    Falls back to the browser compare page when gh is missing.
+
+    .PARAMETER Base
+    Branch to compare against. Defaults to master.
+
+    .PARAMETER DryRun
+    Print the title, labels and body without creating or changing anything.
+
+    .EXAMPLE
+    gpr -DryRun
+
+    .EXAMPLE
+    gpr -Base develop
+
+    .NOTES
+    Alias: gpr. Always uses AI for the body.
+    #>
     [CmdletBinding()]
     param (
         [string]$Base = "master",
-        [switch]$AI,
         [switch]$DryRun
     )
 
@@ -265,7 +412,7 @@ function Git-PR {
     }
 
     # Gather commits since diverging from base — normalize to clean unique array
-    $rawCommits = @(git log "$Base...HEAD" --pretty=format:"%s" 2>$null)
+    $rawCommits = @(git log "$Base..HEAD" --pretty=format:"%s" 2>$null)
     $commitList = $rawCommits | Where-Object { $_ -ne "" } | ForEach-Object { $_.Trim() } | Select-Object -Unique
     if ($commitList.Count -eq 0) {
         Write-Host "No commits found between '$Base' and '$currentBranch'." -ForegroundColor Yellow
@@ -276,13 +423,63 @@ function Git-PR {
     $changedFiles = @(git diff "$Base...HEAD" --name-only 2>$null) | Where-Object { $_ -ne "" }
     $diffStat = git diff "$Base...HEAD" --stat 2>$null | Select-Object -Last 1
 
-    # --- Derive fallback PR title from branch name ---
-    $titleFromBranch = $currentBranch -replace "^[^/]+/", ""
-    $titleFromBranch = $titleFromBranch -replace "^(feature|fix|chore|docs|refactor|test|hotfix)[/_-]", ""
-    $titleFromBranch = $titleFromBranch -replace "[_/-]", " "
-    $titleFromBranch = (Get-Culture).TextInfo.ToTitleCase($titleFromBranch.ToLower())
+    # --- Collect referenced issue numbers from commits + branch name ---
+    # GitHub auto-links and auto-closes issues when the PR body contains
+    # "Fixes #N" / "Closes #N" / "Resolves #N". Scan commit messages and the
+    # branch name for bare "#N" or conventional "WP-N"/"ISSUE-N" references.
+    $issueNumbers = [System.Collections.Generic.HashSet[int]]::new()
+    $issueRegex   = '(?<!\w)#(\d+)\b'
 
-    $prTitle = if ($commitList.Count -eq 1) { $commitList[0] } else { $titleFromBranch }
+    $commitBodies = git log "$Base..HEAD" --pretty=format:"%B" 2>$null | Out-String
+    foreach ($match in [regex]::Matches("$commitBodies $currentBranch", $issueRegex)) {
+        [void]$issueNumbers.Add([int]$match.Groups[1].Value)
+    }
+
+    # Branch names like "fix/42-something" or "feature/issue-42-something"
+    if ($currentBranch -match '(?<!\d)(?:issue[-_]?|#)(\d+)') {
+        [void]$issueNumbers.Add([int]$Matches[1])
+    } elseif ($currentBranch -match '^[^/]+/(\d+)[-_]') {
+        [void]$issueNumbers.Add([int]$Matches[1])
+    }
+
+    $linkedIssues = @($issueNumbers | Sort-Object)
+    if ($linkedIssues.Count -gt 0) {
+        Write-Host "Detected linked issues: $(($linkedIssues | ForEach-Object { "#$_" }) -join ', ')" -ForegroundColor DarkGray
+    }
+
+    # --- Fetch open issues from GitHub so Claude can suggest additional links ---
+    # The local scan above only catches issues already referenced in commits/branch.
+    # Pulling the open issue list lets Claude correlate PR content with unreferenced
+    # issues (e.g. a PR that fixes an issue but whose commit message never said so).
+    $openIssuesJson = $null
+    if (Get-Command gh -ErrorAction SilentlyContinue) {
+        $ghIssues = gh issue list --state open --limit 100 --json number,title,labels 2>$null
+        if ($LASTEXITCODE -eq 0 -and $ghIssues) {
+            $openIssuesJson = $ghIssues | Out-String
+            $openCount = ($ghIssues | ConvertFrom-Json).Count
+            Write-Host "Fetched $openCount open issues from GitHub" -ForegroundColor DarkGray
+        }
+    }
+
+    # --- Derive PR title from commit messages ---
+    # Strip conventional commit prefixes to get clean descriptions
+    $cleanCommits = $commitList | ForEach-Object {
+        $_ -replace "^(feat|fix|chore|docs|refactor|test|ci|perf|style|build)(\(.+?\))?!?:\s*", ""
+    } | ForEach-Object { (Get-Culture).TextInfo.ToTitleCase($_.ToLower()) }
+
+    if ($commitList.Count -eq 1) {
+        # Single commit — use the clean title-cased message
+        $prTitle = $cleanCommits[0]
+    } elseif ($cleanCommits.Count -le 3) {
+        # 2-3 commits — join with " + "
+        $prTitle = $cleanCommits -join " + "
+        if ($prTitle.Length -gt 70) { $prTitle = $prTitle.Substring(0, 67) + "..." }
+    } else {
+        # Many commits — take the most common prefix type and summarize from branch name
+        $titleFromBranch = $currentBranch -replace "^.+/", ""
+        $titleFromBranch = $titleFromBranch -replace "[-_]", " "
+        $prTitle = (Get-Culture).TextInfo.ToTitleCase($titleFromBranch.ToLower())
+    }
 
     # --- Load skill file for PR conventions ---
     $repoRoot  = git rev-parse --show-toplevel 2>$null
@@ -292,104 +489,151 @@ function Git-PR {
         Get-Content $skillFile -Raw
     } else { $null }
 
-    # --- Build PR body ---
-    if ($AI -and -not (Get-Command claude -ErrorAction SilentlyContinue)) {
-        Write-Warning "Claude Code CLI ('claude') not found in PATH — falling back to basic body."
-        $AI = $false
+    # --- Build PR body via AI ---
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        Write-Host "Claude Code CLI ('claude') not found in PATH. Cannot generate PR body." -ForegroundColor Red
+        return
     }
 
-    if ($AI) {
-        Write-Host "Generating AI summary..." -ForegroundColor Cyan
-        $fullDiff = git diff "$Base...HEAD" 2>$null | Out-String
-        if ($fullDiff.Length -gt 12000) { $fullDiff = $fullDiff.Substring(0, 12000) + "`n...(truncated)" }
+    Write-Host "Generating AI summary..." -ForegroundColor Cyan
 
-        $conventionsBlock = if ($skillText) {
-            "The following skill file defines the conventions for this repo — follow them exactly:`n`n$skillText"
-        } else {
-            @"
+    # File list with status (A/M/D/R) — always included in full
+    $nameStatus = git diff "$Base...HEAD" --name-status 2>$null | Out-String
+
+    # Commit log with full descriptions (not just subjects)
+    $commitLog = git log "$Base..HEAD" --pretty=format:"%h %s%n%b" 2>$null | Out-String
+
+    # Full diff — no truncation, let Claude read everything
+    $fullDiff = git diff "$Base...HEAD" 2>$null | Out-String
+    Write-Host "Diff size: $([math]::Round($fullDiff.Length / 1024))KB ($($changedFiles.Count) files)" -ForegroundColor DarkGray
+
+    $conventionsBlock = if ($skillText) {
+        "The following skill file defines the conventions for this repo — follow them exactly:`n`n$skillText"
+    } else {
+        @"
 Title rules:
 - Title Case phrases joined by " + " (e.g. "Refactor Account Service + Add Integration Tests")
 - Imperative mood, no trailing period
 - Derived from commit messages, not branch name
+- Never include usernames or author names in the title
 
 Body sections:
 ## Summary
-(2-4 bullet points describing what changed and why)
+(2-5 sentences describing what this PR does and why — elevator pitch)
 
 ## Changes
-(bullet list of notable file/area changes)
+(bulleted list grouped by feature/concern — describe behavioral changes, not filenames)
+
+## Package Bumps
+(table of changed dependencies with From/To versions — omit if none)
 
 ## Test Plan
-(bulleted checklist of how to verify this works — omit if purely docs/config)
+(short checklist, 1-3 items)
 
 ## Notes
 (caveats, breaking changes, follow-ups — omit if nothing relevant)
 "@
-        }
+    }
 
-        $prompt = @"
+    # Write the diff to a temp file so Claude can read it via tools
+    # instead of stuffing it into the prompt (which hits the input limit)
+    $diffFile = Join-Path ([System.IO.Path]::GetTempPath()) "pr-diff-$([System.IO.Path]::GetRandomFileName()).patch"
+    [System.IO.File]::WriteAllText($diffFile, $fullDiff, [System.Text.Encoding]::UTF8)
+    Write-Host "Diff written to $diffFile ($([math]::Round((Get-Item $diffFile).Length / 1024))KB)" -ForegroundColor DarkGray
+
+    $issuesBlock = ""
+    if ($linkedIssues.Count -gt 0) {
+        $issueList = ($linkedIssues | ForEach-Object { "#$_" }) -join ", "
+        $issuesBlock += @"
+
+Linked issues (already detected from commits / branch): $issueList
+Include a "Closes $issueList" line at the bottom of the body so GitHub auto-links
+and auto-closes these issues when the PR merges. Use "Closes" for each issue
+(e.g. "Closes #1, closes #2") so every issue is linked individually.
+"@
+    }
+    if ($openIssuesJson) {
+        $issuesBlock += @"
+
+
+Open GitHub issues (JSON array of {number,title,labels}):
+$openIssuesJson
+
+If any of the ABOVE open issues are clearly resolved by the diff you read, add
+them to the closing line as well (e.g. "Closes #12, closes #17"). Only include
+an issue if the diff unambiguously addresses its title — when in doubt, skip it.
+"@
+    }
+
+    $prompt = @"
 You are writing a GitHub pull request title and description.
-Based on the information below, write a concise, professional PR title and body.
+Summarize what the code DOES DIFFERENTLY after this PR — do NOT list commit
+messages, filenames, or SHAs as bullets. Group changes by feature/concern.
 
 Branch: $currentBranch -> $Base
-Commits:
-$($commitList -join "`n")
+Stat: $diffStat
 
-Changed files:
-$($changedFiles -join "`n")
+Commit log (for context/intent — do NOT copy as summary bullets):
+$commitLog
 
-Diff (may be truncated):
-$fullDiff
+Files changed (A=added, M=modified, D=deleted, R=renamed):
+$nameStatus
 
+The full diff is saved at: $diffFile
+Read this file using the Read tool to understand every change. Read it in
+chunks if needed (use offset/limit parameters). Do NOT skip reading the diff.
+$issuesBlock
 $conventionsBlock
 
-Respond in this exact format (no extra text before TITLE):
+After reading the diff, respond in this exact format (no extra text before TITLE):
 TITLE: <title>
 LABELS: <comma-separated labels from the skill file>
 ---
 <body markdown>
 "@
 
-        try {
-            $OutputEncoding = [System.Text.Encoding]::UTF8
-            $aiOutput = ($prompt | claude --print) -join "`n"
-            if ($LASTEXITCODE -eq 0 -and $aiOutput) {
-                if ($aiOutput -match "(?m)^TITLE:\s*(.+)$")  { $prTitle   = $Matches[1].Trim() }
-                if ($aiOutput -match "(?m)^LABELS:\s*(.+)$") { $aiLabels  = $Matches[1].Trim() }
-                $body = $aiOutput -replace "(?m)^TITLE:.*$\r?\n?",  ""
-                $body = $body    -replace "(?m)^LABELS:.*$\r?\n?", ""
-                $body = $body    -replace "(?m)^---\s*$\r?\n?",     ""
-                $body = $body.Trim()
-                if (-not $body) {
-                    Write-Warning "Could not parse AI body — falling back to basic body."
-                    $AI = $false
-                }
-            } else {
-                Write-Warning "Claude returned no output — falling back to basic body."
-                $AI = $false
-            }
-        } catch {
-            Write-Warning "AI call failed: $($_.Exception.Message) — falling back to basic body."
-            $AI = $false
+    $body = $null
+    try {
+        Write-Host "Sending to Claude (with Read tool access)..." -ForegroundColor DarkGray
+        $aiOutput = ($prompt | claude --print --allowedTools "Read" --dangerously-skip-permissions) -join "`n"
+        if ($LASTEXITCODE -ne 0 -or -not $aiOutput) {
+            Write-Host "Claude exited with code $LASTEXITCODE." -ForegroundColor Red
+            if ($aiOutput) { Write-Host "Output: $aiOutput" -ForegroundColor Gray }
+            return
         }
+        if ($aiOutput -match "(?m)^TITLE:\s*(.+)$")  { $prTitle  = $Matches[1].Trim() }
+        if ($aiOutput -match "(?m)^LABELS:\s*(.+)$") { $aiLabels = $Matches[1].Trim() }
+        $body = $aiOutput -replace "(?m)^TITLE:.*$\r?\n?",  ""
+        $body = $body    -replace "(?m)^LABELS:.*$\r?\n?", ""
+        $body = $body    -replace "(?m)^---\s*$\r?\n?",     ""
+        $body = $body.Trim()
+    } catch {
+        Write-Host "AI call failed: $($_.Exception.Message)" -ForegroundColor Red
+        return
+    } finally {
+        Remove-Item $diffFile -ErrorAction SilentlyContinue
     }
 
-    if (-not $AI) {
-        $commitLines = ($commitList | ForEach-Object { "- $_" }) -join "`n"
-        $fileLines   = ($changedFiles | Select-Object -First 20 | ForEach-Object { "- $_" }) -join "`n"
-        if ($changedFiles.Count -gt 20) { $fileLines += "`n- _(and more...)_" }
+    if (-not $body) {
+        Write-Host "Could not parse PR body from Claude output. Raw output:" -ForegroundColor Red
+        Write-Host $aiOutput -ForegroundColor Gray
+        return
+    }
 
-        $body = @"
-## Summary
-
-$commitLines
-
-## Changes
-
-$fileLines
-
-$( if ($diffStat) { "**Diff:** $diffStat" } )
-"@
+    # Safety net — if Claude didn't include closing keywords, append them so the
+    # linked issues still get auto-closed on merge.
+    if ($linkedIssues.Count -gt 0) {
+        $missing = @()
+        foreach ($n in $linkedIssues) {
+            if ($body -notmatch "(?im)(close[ds]?|fix(e[ds])?|resolve[ds]?)\s+#$n\b") {
+                $missing += "#$n"
+            }
+        }
+        if ($missing.Count -gt 0) {
+            $closingLine = "Closes " + (($missing | ForEach-Object { $_ }) -join ", closes ")
+            $body = $body.TrimEnd() + "`n`n$closingLine`n"
+            Write-Host "Appended closing keywords for: $($missing -join ', ')" -ForegroundColor DarkGray
+        }
     }
 
     # --- Derive GitHub repo path from remote ---
@@ -406,8 +650,9 @@ $( if ($diffStat) { "**Diff:** $diffStat" } )
     if ($hasGh) {
         $prJson = gh pr view --json number,url 2>$null
         if ($LASTEXITCODE -eq 0 -and $prJson) {
-            $existingPr  = ($prJson | ConvertFrom-Json).number
-            $existingUrl = ($prJson | ConvertFrom-Json).url
+            $prInfo      = $prJson | ConvertFrom-Json
+            $existingPr  = $prInfo.number
+            $existingUrl = $prInfo.url
         }
     }
 
@@ -440,9 +685,12 @@ $( if ($diffStat) { "**Diff:** $diffStat" } )
     if ($existingPr) {
         # Update existing PR via gh then open it
         Write-Host "Updating PR #$existingPr..." -ForegroundColor Cyan
-        $editArgs = @("pr", "edit", $existingPr, "--title", $prTitle, "--body", $body, "--add-assignee", "@me")
-        if ($aiLabels) { $editArgs += @("--label", $aiLabels) }
+        $editBodyFile = Join-Path ([System.IO.Path]::GetTempPath()) "pr-edit-body-$([System.IO.Path]::GetRandomFileName()).md"
+        [System.IO.File]::WriteAllText($editBodyFile, $body, [System.Text.Encoding]::UTF8)
+        $editArgs = @("pr", "edit", $existingPr, "--title", $prTitle, "--body-file", $editBodyFile, "--add-assignee", "@me")
+        if ($aiLabels) { foreach ($l in $aiLabels -split ',') { $editArgs += @("--add-label", $l.Trim()) } }
         gh @editArgs
+        Remove-Item $editBodyFile -ErrorAction SilentlyContinue
         if ($LASTEXITCODE -eq 0) {
             Write-Host "PR #$existingPr updated: $existingUrl" -ForegroundColor Green
             Start-Process $existingUrl
@@ -452,27 +700,49 @@ $( if ($diffStat) { "**Diff:** $diffStat" } )
     } elseif ($hasGh) {
         # Create via gh so labels and assignee are applied immediately, then open it
         Write-Host "Creating PR via gh..." -ForegroundColor Cyan
-        $ghArgs = @("pr", "create", "--base", $Base, "--title", $prTitle, "--body", $body, "--assignee", "@me")
-        if ($aiLabels) { $ghArgs += @("--label", $aiLabels) }
-        $newPrUrl = gh @ghArgs 2>&1 | Select-Object -Last 1
-        if ($LASTEXITCODE -eq 0 -and $newPrUrl -match "^https://") {
+        $bodyFile = Join-Path ([System.IO.Path]::GetTempPath()) "pr-body-$([System.IO.Path]::GetRandomFileName()).md"
+        [System.IO.File]::WriteAllText($bodyFile, $body, [System.Text.Encoding]::UTF8)
+        try {
+            $ghArgs = @("pr", "create", "--base", $Base, "--title", $prTitle, "--body-file", $bodyFile, "--assignee", "@me")
+            $newPrUrl = gh @ghArgs 2>&1 | Select-Object -Last 1
+            # Add labels separately so missing labels don't fail the PR creation
+            if ($LASTEXITCODE -eq 0 -and $aiLabels) {
+                foreach ($l in $aiLabels -split ',') {
+                    gh pr edit --add-label $l.Trim() 2>$null
+                }
+            }
+        } finally {
+            Remove-Item $bodyFile -ErrorAction SilentlyContinue
+        }
+        if ($newPrUrl -match "^https://") {
             Write-Host "PR created: $newPrUrl" -ForegroundColor Green
             Start-Process $newPrUrl
         } else {
-            Write-Warning "gh pr create failed — falling back to browser."
+            Write-Warning "gh pr create failed (exit code: $LASTEXITCODE). Output: $newPrUrl"
             if ($repoPath) {
-                $encodedTitle = [Uri]::EscapeDataString($prTitle)
-                $encodedBody  = [Uri]::EscapeDataString($body)
-                Start-Process "https://github.com/$repoPath/compare/$Base...$($currentBranch)?expand=1&title=$encodedTitle&body=$encodedBody"
+                Set-Clipboard $body
+                Write-Host "PR body copied to clipboard. Paste it in the description field." -ForegroundColor Yellow
+                $truncatedTitle = if ($prTitle.Length -gt 200) { $prTitle.Substring(0, 197) + "..." } else { $prTitle }
+                $encodedTitle = [Uri]::EscapeDataString($truncatedTitle)
+                Start-Process "https://github.com/$repoPath/compare/$Base...$($currentBranch)?expand=1&title=$encodedTitle"
             }
         }
     } elseif ($repoPath) {
-        $encodedTitle = [Uri]::EscapeDataString($prTitle)
-        $encodedBody  = [Uri]::EscapeDataString($body)
-        $prUrl = "https://github.com/$repoPath/compare/$Base...$($currentBranch)?expand=1&title=$encodedTitle&body=$encodedBody"
+        Set-Clipboard $body
+        Write-Host "PR body copied to clipboard. Paste it in the description field." -ForegroundColor Yellow
+        $truncatedTitle = if ($prTitle.Length -gt 200) { $prTitle.Substring(0, 197) + "..." } else { $prTitle }
+        $encodedTitle = [Uri]::EscapeDataString($truncatedTitle)
         Write-Host "Opening GitHub PR page in browser..." -ForegroundColor Cyan
-        Start-Process $prUrl
+        Start-Process "https://github.com/$repoPath/compare/$Base...$($currentBranch)?expand=1&title=$encodedTitle"
     } else {
         Write-Warning "Could not parse GitHub URL from remote '$remoteUrl'. Push complete — open GitHub manually."
     }
 }
+
+Set-Alias -Name gcp   -Value Push-GitCommit
+Set-Alias -Name gsync -Value Sync-GitBranch
+Set-Alias -Name gundo -Value Undo-GitCommit
+Set-Alias -Name gamend -Value Edit-GitCommit
+Set-Alias -Name gdiff -Value Show-GitDiff
+Set-Alias -Name glg   -Value Show-GitGraph
+Set-Alias -Name gpr   -Value New-GitPR

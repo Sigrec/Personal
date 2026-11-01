@@ -1,0 +1,124 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "file",
+    "source": "S:/Personal/fastfetch/options/2_triskele.txt",
+    "color": {
+      "1": "#a25a63",
+      "2": "#e1dfe5",
+      "3": "#bfa481"
+    },
+    "padding": {
+      "top": 1,
+      "right": 3
+    }
+  },
+  "display": {
+    "separator": ": ",
+    "color": {
+      "keys": "#bfa481",
+      "title": "#EFAFA9",
+      "separator": "#8d88b6"
+    },
+    "percent": {
+      "type": [
+        "num",
+        "bar"
+      ],
+      "color": {
+        "green": "#7aa37a",
+        "yellow": "#bfa481",
+        "red": "#a25a63"
+      }
+    }
+  },
+  "modules": [
+    {
+      "type": "title",
+      "color": {
+        "user": "#EFAFA9",
+        "at": "#e1dfe5",
+        "host": "#EFAFA9"
+      }
+    },
+    {
+      "type": "custom",
+      "format": "──────────────────────────────",
+      "outputColor": "#8d88b6"
+    },
+    {
+      "type": "os"
+    },
+    {
+      "type": "host"
+    },
+    {
+      "type": "kernel"
+    },
+    {
+      "type": "uptime"
+    },
+    {
+      "type": "packages"
+    },
+    {
+      "type": "shell"
+    },
+    {
+      "type": "display"
+    },
+    {
+      "type": "wm"
+    },
+    {
+      "type": "theme"
+    },
+    {
+      "type": "font"
+    },
+    {
+      "type": "terminal"
+    },
+    {
+      "type": "terminalfont"
+    },
+    {
+      "type": "cpu"
+    },
+    {
+      "type": "gpu"
+    },
+    {
+      "type": "memory"
+    },
+    {
+      "type": "swap"
+    },
+    {
+      "type": "disk",
+      "folders": "S:\\"
+    },
+    {
+      "type": "localip"
+    },
+    {
+      "type": "battery"
+    },
+    {
+      "type": "locale"
+    },
+    "break",
+    {
+      "type": "colors",
+      "symbol": "block",
+      "paddingLeft": 0,
+      "block": {
+        "width": 3,
+        "range": [
+          0,
+          15
+        ]
+      }
+    }
+  ]
+}

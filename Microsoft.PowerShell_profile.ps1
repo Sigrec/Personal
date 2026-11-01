@@ -4,16 +4,14 @@
 $OutputEncoding           = [System.Text.Encoding]::UTF8
 
 # Start OMP styling
-oh-my-posh init pwsh --config "S:\Personal\Themes\wild_west_vibes.omp.json" | Invoke-Expression
+oh-my-posh init pwsh --config "S:\Personal\Themes\wild_west_powerline.omp.json" | Invoke-Expression
 
-# Import modules
-Import-Module -Name Terminal-Icons
-Import-Module posh-git
-Import-Module PSReadLine
+# Modules needed before the first prompt (PSReadLine is already loaded by the host)
+Import-Module CompletionPredictor
 Invoke-Expression (& { (zoxide init powershell | Out-String) })
 
 # Import local scripts (with error isolation so profile doesn't die)
-Get-ChildItem -Path "S:\Personal\Scripts" -Filter *.ps1 -Recurse | ForEach-Object {
+Get-ChildItem -Path "S:\Personal\Scripts" -Filter *.ps1 | ForEach-Object {
     try {
         . $_.FullName
     }
@@ -22,139 +20,50 @@ Get-ChildItem -Path "S:\Personal\Scripts" -Filter *.ps1 -Recurse | ForEach-Objec
     }
 }
 
+# Machine-specific values (API keys, webhook secrets) live in a git-ignored file
+$LocalProfile = Join-Path $PSScriptRoot "profile.local.ps1"
+if (Test-Path $LocalProfile) { . $LocalProfile }
+
 # Enable Read line
 if ($host.Name -eq 'ConsoleHost')
 {
     $PSReadLineOptions = @{
         HistoryNoDuplicates = $true
         HistorySearchCursorMovesToEnd = $true
+        PredictionSource = 'HistoryAndPlugin'
+        PredictionViewStyle = 'InlineView'
         # Removed "Default" and used specific keys to avoid parsing errors
         Colors = @{
             "Command" = "#F7E0B4"
         }
     }
     Set-PSReadLineOption @PSReadLineOptions
-}
 
-# Command to kill browser instances
-function kb([string]$Browser)
-{
-    $Browser = $Browser.ToLower()
-    Switch($Browser)
-    {
-        {$_ -in "firefox", "ff"} { taskkill /F /IM firefox.exe /T ; taskkill /F /IM geckodriver.exe /T }
-        {$_ -in "chrome", "c"} { taskkill /F /IM chrome.exe /T ; taskkill /F /IM chromedriver.exe /T }
-        default { Write-Error "Invalid browser" }
-    }
-}
+    # Up/Down search history by the text already typed (like zsh)
+    Set-PSReadLineKeyHandler -Key UpArrow   -Function HistorySearchBackward
+    Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
 
-function Get-ModifiedFilesSince {
-    [CmdletBinding()]
-    param (
-        [string]$Path = ".",
-        [datetime]$Since = (Get-Date).AddDays(-1),
-        [switch]$Recurse
-    )
+    # Slow modules (about 1.3s together) load after the first prompt is drawn,
+    # so the shell is usable right away: Terminal-Icons, posh-git, PSFzf and
+    # Chocolatey tab-completion. Ctrl+R / Ctrl+T switch to fzf once PSFzf loads.
+    $null = Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action {
+        Import-Module Terminal-Icons, posh-git, PSFzf -Global
+        Set-PsFzfOption -PSReadlineChordProvider 'Ctrl+t' -PSReadlineChordReverseHistory 'Ctrl+r'
 
-    Get-ChildItem -Path $Path -File -Recurse:$Recurse | Where-Object {
-        $_.LastWriteTime -ge $Since
-    } | Select-Object -ExpandProperty Name
-}
-
-# Import the Chocolatey Profile that contains the necessary code to enable
-# tab-completions to function for `choco`.
-# Be aware that if you are missing these lines from your profile, tab completion
-# for `choco` will not function.
-# See https://ch0.co/tab-completion for details.
-$ChocolateyProfile = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
-if (Test-Path($ChocolateyProfile)) {
-  Import-Module "$ChocolateyProfile"
-}
-
-function Resolve-RelativePath {
-    param ([string]$Base, [string]$Relative)
-
-    # Added guard: if Base is null, use current location or return null
-    if (-not $Base) { $Base = (Get-Location).Path }
-    if ([string]::IsNullOrWhiteSpace($Relative)) { return $Base }
-
-    if ($Relative -like "*[\\/]*") {
-        $segments = $Relative -split '[\\/]' | Where-Object { $_ }
-        foreach ($segment in $segments) {
-            $Base = Join-Path -Path $Base -ChildPath $segment
+        $chocolateyProfile = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+        if ($env:ChocolateyInstall -and (Test-Path $chocolateyProfile)) {
+            Import-Module $chocolateyProfile -Global
         }
-        return $Base
-    } else {
-        return Join-Path -Path $Base -ChildPath $Relative
     }
 }
 
-function Update-AllPowerShellModules {
-    [CmdletBinding()]
-    param()
-
-    Write-Host "🚀 Starting Global Update..." -ForegroundColor Cyan
-
-    # 1. Update PowerShell Modules
-    Write-Host "📦 Checking for PowerShell module updates..." -ForegroundColor Yellow
-    try {
-        # Update the package provider first to prevent handshake errors
-        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction SilentlyContinue
-        
-        # Update all modules installed via Install-Module
-        Update-Module -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-        Write-Host "✅ PowerShell modules updated." -ForegroundColor Green
-    }
-    catch {
-        Write-Warning "Some modules could not be updated (they may be in use or require Admin)."
-    }
-
-    # 2. Update Chocolatey Packages (including zoxide if you just installed it)
-    if (Get-Command choco -ErrorAction SilentlyContinue) {
-        Write-Host "🍫 Checking Chocolatey packages..." -ForegroundColor Yellow
-        choco upgrade all -y
-    }
-
-    # 3. Update oh-my-posh (since you use it for your Wild West theme)
-    if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
-        Write-Host "🤠 Updating Oh My Posh..." -ForegroundColor Yellow
-        oh-my-posh upgrade
-    }
-
-    # 4. Update winget packages
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Host "📦 Checking winget packages..." -ForegroundColor Yellow
-        winget upgrade --all --silent --accept-package-agreements --accept-source-agreements
-    }
-
-    Write-Host "✨ All systems updated!" -ForegroundColor Cyan
+# System summary on a fresh interactive terminal (skipped for -Command / -File runs)
+if ($host.Name -eq 'ConsoleHost' -and (Get-Command fastfetch -ErrorAction SilentlyContinue) -and
+    -not ([Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-(c|command|f|file|encodedcommand)$' })) {
+    fastfetch --config "S:\Personal\fastfetch\config.jsonc"
 }
 
-function Reload-Profile {
-    [CmdletBinding()]
-    param(
-        [switch]$Clear
-    )
-
-    Write-Host "🔄 Reloading PowerShell profile..." -ForegroundColor Cyan
-    
-    # Dot-source the profile
-    . $PROFILE
-
-    if ($Clear) {
-        Clear-Host
-    }
-}
-
-# Update the alias to ensure it points to the new logic
-Set-Alias -Name reload -Value Reload-Profile
-
-function Push-WpCode {
-    Set-Location "S:\TCG SaaS Platform\WholesaleProgramPlatform"
-    $Host.UI.RawUI.WindowTitle = "Code"
-}
-
-function Push-WpWiki {
-    Set-Location "S:\TCG SaaS Platform\WholesaleProgramPlatform.wiki"
-    $Host.UI.RawUI.WindowTitle = "Wiki"
+# dotnetup SDK location
+if ($env:PATH -notlike "*C:\Users\Sean\.dotnetup*") {
+    $env:PATH = "C:\Users\Sean\.dotnetup;$env:PATH"
 }

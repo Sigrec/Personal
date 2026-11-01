@@ -1,38 +1,101 @@
-function Print-FolderStructure {
+function Show-FolderStructure {
+    <#
+    .SYNOPSIS
+    Prints a folder as a tree with Terminal-Icons file icons.
+
+    .DESCRIPTION
+    Recursively lists Path with box-drawing connectors, folders first. Uses
+    Terminal-Icons for the icons and colors, so that module must be loaded.
+
+    .PARAMETER Path
+    Folder or file to print. Defaults to the current folder.
+
+    .PARAMETER ExcludeFolders
+    Folder names to skip, such as bin, obj or node_modules.
+
+    .PARAMETER Indent
+    Internal: the prefix for the current depth.
+
+    .PARAMETER IsLast
+    Internal: whether this entry is the last child of its parent.
+
+    .EXAMPLE
+    Show-FolderStructure -ExcludeFolders bin, obj, node_modules
+
+    .EXAMPLE
+    ftree src
+
+    .NOTES
+    Alias: ftree
+    #>
     [CmdletBinding()]
     param (
-        [string]$Path=$(Get-Location).Path,
+        [Parameter(Position = 0)]
+        [string]$Path = (Get-Location).Path,
+
         [string[]]$ExcludeFolders = @(),
-        [string]$Indent = "",
+
+        [string]$Indent = '',
+
         [bool]$IsLast = $true
     )
 
     $item = Get-Item -LiteralPath $Path
     $iconEntry = $item | Format-TerminalIcons
-    $prefix = if ($Indent) { $Indent + ($IsLast ? "└─ " : "├─ ") } else { "" }
-    Write-Host "$prefix$($iconEntry)" 
+    $prefix = if ($Indent) { $Indent + ($IsLast ? '└─ ' : '├─ ') } else { '' }
+    Write-Host "$prefix$iconEntry"
 
-    if ($item.PSIsContainer) {
-        $children = Get-ChildItem -LiteralPath $item.FullName -ErrorAction SilentlyContinue |
-            Where-Object { -not ($ExcludeFolders -contains $_.Name -and $_.PSIsContainer) } |
-            Sort-Object @{Expression = { if ($_.PSIsContainer) { 0 } else { 1 } }}, Name
+    if (-not $item.PSIsContainer) { return }
 
-        $count = $children.Count
-        for ($i = 0; $i -lt $count; $i++) {
-            Print-FolderStructure -Path $children[$i].FullName -ExcludeFolders $ExcludeFolders `
-                   -Indent ($Indent + ($IsLast ? "   " : "│  ")) -IsLast:($i -eq $count - 1)
+    $children = Get-ChildItem -LiteralPath $item.FullName -ErrorAction SilentlyContinue |
+        Where-Object { -not ($_.PSIsContainer -and $ExcludeFolders -contains $_.Name) } |
+        Sort-Object @{ Expression = { -not $_.PSIsContainer } }, Name
+
+    $count = @($children).Count
+    $childIndent = $Indent + ($IsLast ? '   ' : '│  ')
+
+    for ($i = 0; $i -lt $count; $i++) {
+        Show-FolderStructure -Path $children[$i].FullName -ExcludeFolders $ExcludeFolders `
+            -Indent $childIndent -IsLast:($i -eq $count - 1)
+    }
+}
+
+function Update-FileTimestamp {
+    <#
+    .SYNOPSIS
+    Creates an empty file, or bumps its last-write time if it exists (touch).
+
+    .DESCRIPTION
+    Works like the Unix touch command. Accepts several paths and pipeline input.
+
+    .PARAMETER Path
+    One or more files to create or update.
+
+    .EXAMPLE
+    touch notes.txt, todo.txt
+
+    .NOTES
+    Alias: touch
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param (
+        [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
+        [string[]]$Path
+    )
+
+    process {
+        foreach ($file in $Path) {
+            if (-not $PSCmdlet.ShouldProcess($file, 'Create or update timestamp')) { continue }
+
+            if (Test-Path -LiteralPath $file) {
+                (Get-Item -LiteralPath $file).LastWriteTime = Get-Date
+            }
+            else {
+                New-Item -ItemType File -Path $file | Out-Null
+            }
         }
     }
 }
 
-function Touch {
-    [CmdletBinding()]
-    param (
-        [string]$Path
-    )
-    if (-not (Test-Path $Path)) {
-        New-Item -ItemType File -Path $Path | Out-Null
-    } else {
-        (Get-Item $Path).LastWriteTime = Get-Date
-    }
-}
+Set-Alias -Name ftree -Value Show-FolderStructure
+Set-Alias -Name touch -Value Update-FileTimestamp

@@ -1,0 +1,147 @@
+{
+  "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
+  "version": 3,
+  "final_space": true,
+  "blocks": [
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "segments": [
+        {
+          "type": "session",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "background": "#EFAFA9",
+          "foreground": "#1e1b24",
+          "template": " {{ .UserName }}@{{ .HostName }} "
+        },
+        {
+          "type": "path",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "background": "#8d88b6",
+          "foreground": "#1e1b24",
+          "template": "  {{ .Path }} ",
+          "properties": {
+            "style": "agnoster_short",
+            "max_depth": 3,
+            "folder_separator_icon": "  "
+          }
+        },
+        {
+          "type": "git",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "background": "#bfa481",
+          "foreground": "#1e1b24",
+          "template": " {{ .UpstreamIcon }}{{ .HEAD }}{{if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }}  {{ .Working.String }}{{ end }}{{ if and (.Working.Changed) (.Staging.Changed) }} |{{ end }}{{ if .Staging.Changed }}  {{ .Staging.String }}{{ end }}{{ if gt .StashCount 0 }}  {{ .StashCount }}{{ end }} ",
+          "properties": {
+            "branch_max_length": 40,
+            "fetch_stash_count": true,
+            "fetch_status": true,
+            "fetch_upstream_icon": true
+          },
+          "background_templates": [
+            "{{ if or (.Working.Changed) (.Staging.Changed) }}#bfa481{{ end }}",
+            "{{ if and (gt .Ahead 0) (gt .Behind 0) }}#2c8585{{ end }}",
+            "{{ if or (gt .Ahead 0) (gt .Behind 0) }}#8d88b6{{ end }}",
+            "#7aa37a"
+          ]
+        },
+        {
+          "type": "aspire",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "background": "#708b91",
+          "foreground": "#1e1b24",
+          "template": "  {{ .Name }}{{ if .Running }} {{ end }} ",
+          "properties": {
+            "fetch_running": true,
+            "cache_duration": "10s"
+          },
+          "background_templates": [
+            "{{ if .Running }}#7aa37a{{ end }}"
+          ]
+        },
+        {
+          "type": "aws",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "background": "#bfa481",
+          "foreground": "#1e1b24",
+          "template": "  {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }} ",
+          "properties": {
+            "display_default": false
+          },
+          "background_templates": [
+            "{{ if contains \"prod\" .Profile }}#a25a63{{ end }}"
+          ]
+        },
+        {
+          "type": "dotnet",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "background": "#7790a8",
+          "foreground": "#1e1b24",
+          "template": " .NET {{ .Major }}.{{ .Minor }} ",
+          "properties": {
+            "fetch_version": true
+          }
+        },
+        {
+          "type": "kubectl",
+          "style": "powerline",
+          "powerline_symbol": "",
+          "background": "#918a9f",
+          "foreground": "#1e1b24",
+          "template": "  {{ .Context }}{{ if .Namespace }}::{{ .Namespace }}{{ end }} ",
+          "properties": {
+            "parse_kubeconfig": true
+          }
+        }
+      ]
+    },
+    {
+      "type": "rprompt",
+      "segments": [
+        {
+          "type": "executiontime",
+          "style": "plain",
+          "foreground": "#708b91",
+          "template": "  {{ .FormattedMs }} ",
+          "properties": {
+            "threshold": 2000
+          }
+        },
+        {
+          "type": "status",
+          "style": "plain",
+          "foreground": "#a25a63",
+          "template": "  {{ reason .Code }} "
+        },
+        {
+          "type": "time",
+          "style": "plain",
+          "foreground": "#8d88b6",
+          "template": " {{ .CurrentDate | date \"15:04\" }} "
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "newline": true,
+      "segments": [
+        {
+          "type": "text",
+          "style": "plain",
+          "foreground": "#7790a8",
+          "template": "❯",
+          "foreground_templates": [
+            "{{ if gt .Code 0 }}#a25a63{{ end }}"
+          ]
+        }
+      ]
+    }
+  ]
+}

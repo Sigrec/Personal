@@ -98,6 +98,20 @@ config.keys = {
   { key = 'v', mods = 'CTRL', action = act.PasteFrom 'Clipboard' },
   { key = 'f', mods = 'CTRL|SHIFT', action = act.Search 'CurrentSelectionOrEmptyString' },
 
+  -- Rename the current tab; an empty name goes back to the automatic title
+  {
+    key = 'r',
+    mods = 'ALT|SHIFT',
+    action = act.PromptInputLine {
+      description = 'Tab name (empty to reset)',
+      action = wezterm.action_callback(function(window, _, line)
+        if line then
+          window:active_tab():set_title(line)
+        end
+      end),
+    },
+  },
+
   -- Panes (same shortcuts as Windows Terminal)
   { key = 'd', mods = 'ALT|SHIFT', action = wezterm.action_callback(split_auto) },
   { key = 'phys:Minus', mods = 'ALT|SHIFT', action = act.SplitPane { direction = 'Down' } },

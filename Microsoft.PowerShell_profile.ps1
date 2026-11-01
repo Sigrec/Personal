@@ -63,6 +63,13 @@ if ($host.Name -eq 'ConsoleHost' -and (Get-Command fastfetch -ErrorAction Silent
     fastfetch --config "S:\Personal\fastfetch\config.jsonc"
 }
 
+# yazi uses file.exe from Git for Windows to detect file types
+$YaziFileOne = 'C:\Program Files\Git\usr\bin\file.exe'
+if (-not $env:YAZI_FILE_ONE -and (Test-Path $YaziFileOne)) { $env:YAZI_FILE_ONE = $YaziFileOne }
+
+# yazi reads its config from this repo instead of %APPDATA%\yazi\config
+$env:YAZI_CONFIG_HOME = "S:\Personal\yazi"
+
 # dotnetup SDK location
 if ($env:PATH -notlike "*C:\Users\Sean\.dotnetup*") {
     $env:PATH = "C:\Users\Sean\.dotnetup;$env:PATH"

@@ -1,0 +1,15 @@
+[mgr]
+# Column widths: parent folder : current folder : preview.
+# The default is [1, 4, 3]; this keeps the file list narrow and gives the
+# preview the rest of the window.
+ratio = [2, 4, 12]
+
+[open]
+# HTML, SVG and PDF open with the Windows default app (the browser for HTML and
+# SVG) instead of the editor. Shift+O still offers the editor from the open menu.
+prepend_rules = [
+  { url = "*.html", use = ["open", "edit", "reveal"] },
+  { url = "*.htm", use = ["open", "edit", "reveal"] },
+  { url = "*.svg", use = ["open", "edit", "reveal"] },
+  { url = "*.pdf", use = ["open", "reveal"] },
+]

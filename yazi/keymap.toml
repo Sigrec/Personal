@@ -1,0 +1,5 @@
+[mgr]
+prepend_keymap = [
+  # Show the hovered (or selected) file in File Explorer
+  { on = "R", run = 'shell "explorer /select,%s1" --orphan', desc = "Reveal in File Explorer" },
+]

@@ -9,6 +9,7 @@ My PowerShell 7 profile, helper scripts, Oh My Posh themes and WezTerm config.
 | `Themes/` | Oh My Posh themes (`wild_west_powerline.omp.json` is the active one; `wild_west_vibes` is the old plain prompt) |
 | `fastfetch/` | fastfetch config and the ASCII logos (`options/2_triskele.txt` is active; the others are spares) |
 | `wezterm/wezterm.lua` | WezTerm config, my main terminal (see [WezTerm](#wezterm)); `~/.wezterm.lua` loads it |
+| `btop/wild_west_vibes.theme` | btop theme; symlinked into `%LOCALAPPDATA%\Microsoft\WinGet\Links\themes` (btop reads themes next to the `btop.exe` link) |
 | `settings.json` | Windows Terminal settings, kept as a fallback (the live copy is under `%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState`) |
 
 ## Scripts
@@ -57,6 +58,7 @@ What the config sets:
 | Alt+Shift+Arrows | Open a new pane above, below, left or right |
 | Alt+Shift+- / Alt+Shift++ | Split below / split right |
 | Alt+Arrows | Move between panes |
+| Alt+Shift+R | Rename the current tab (empty name resets it) |
 | Ctrl+Shift+W | Close the current pane (no confirmation) |
 
 Setup on a new machine: install WezTerm and the CaskaydiaCove Nerd Font

@@ -45,8 +45,8 @@ What the config sets:
 - **Font:** CaskaydiaCove Nerd Font, size 10, `DemiBold`. WezTerm draws text
   thinner than Windows Terminal; switch to `Regular` if it looks too heavy.
 - **Colors:** Wild West Vibes, the scheme the powerline prompt is built on.
-- **Rendering:** WebGPU on the discrete GPU, capped at 60 fps (the monitor is
-  59 Hz), steady cursor and a solid window. The Acrylic blur was dropped
+- **Rendering:** WebGPU on the discrete GPU, capped at 240 fps (the main
+  monitor is 240 Hz), steady cursor and a solid window. The Acrylic blur was dropped
   because it added input lag; `window_background_opacity = 0.9` with the
   backdrop disabled is the cheap way to get some transparency back.
 - **Window frame:** no title bar; the minimize/maximize/close buttons sit in

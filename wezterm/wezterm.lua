@@ -70,10 +70,10 @@ config.window_background_opacity = 1.0
 
 -- Rendering: WebGPU on the discrete GPU. If anything glitches after a driver
 -- update, remove front_end to fall back to the default OpenGL renderer.
--- The monitor runs at 59 Hz, so 60 fps is all it can show.
+-- The main monitor is 240 Hz (the second one is 60 Hz), so allow up to 240 fps.
 config.front_end = 'WebGpu'
 config.webgpu_power_preference = 'HighPerformance'
-config.max_fps = 60
+config.max_fps = 240
 config.animation_fps = 60
 -- No title bar: the minimize/maximize/close buttons move into the tab bar, which
 -- therefore has to stay visible even with a single tab.

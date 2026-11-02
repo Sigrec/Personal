@@ -13,3 +13,9 @@ prepend_rules = [
   { url = "*.svg", use = ["open", "edit", "reveal"] },
   { url = "*.pdf", use = ["open", "reveal"] },
 ]
+
+[plugin]
+# Markdown renders in the preview pane through glow (plugins/mdglow.yazi).
+prepend_previewers = [
+  { url = "*.md", run = "mdglow" },
+]

@@ -45,9 +45,14 @@ What the config sets:
 - **Font:** CaskaydiaCove Nerd Font, size 10, `DemiBold`. WezTerm draws text
   thinner than Windows Terminal; switch to `Regular` if it looks too heavy.
 - **Colors:** Wild West Vibes, the scheme the powerline prompt is built on.
-- **Tabs:** the tab bar stays hidden until there is a second tab.
-- **Not ported:** always on top (use PowerToys), acrylic and the fixed
-  `Sean@Cerri` tab title.
+- **Rendering:** WebGPU on the discrete GPU, capped at 60 fps (the monitor is
+  59 Hz), steady cursor and a solid window. The Acrylic blur was dropped
+  because it added input lag; `window_background_opacity = 0.9` with the
+  backdrop disabled is the cheap way to get some transparency back.
+- **Window frame:** no title bar; the minimize/maximize/close buttons sit in
+  the tab bar, which is always visible.
+- **Not ported:** always on top (use PowerToys) and the fixed `Sean@Cerri` tab
+  title.
 
 | Shortcut | Action |
 |----------|--------|

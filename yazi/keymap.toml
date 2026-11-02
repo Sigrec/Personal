@@ -1,5 +1,6 @@
 [mgr]
 prepend_keymap = [
-  # Show the hovered (or selected) file in File Explorer
-  { on = "R", run = 'shell "explorer /select,%s1" --orphan', desc = "Reveal in File Explorer" },
+  # Open the folder of the hovered (or selected) file in File Pilot. File Pilot
+  # takes a folder path; there is no documented way to select the file in it.
+  { on = "R", run = 'shell "FPilot.exe %d1" --orphan', desc = "Open folder in File Pilot" },
 ]

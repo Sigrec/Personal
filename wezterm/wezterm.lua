@@ -61,15 +61,31 @@ config.colors = {
 }
 
 -- Window
+-- Solid window. The Acrylic blur (win32_system_backdrop = 'Acrylic' with an opacity
+-- below 1.0) made Windows recomposite every frame and added input lag. A plain
+-- window_background_opacity of about 0.9 with the backdrop disabled is the cheap
+-- way to get some transparency back.
+config.win32_system_backdrop = 'Disable'
 config.window_background_opacity = 1.0
+
+-- Rendering: WebGPU on the discrete GPU. If anything glitches after a driver
+-- update, remove front_end to fall back to the default OpenGL renderer.
+-- The monitor runs at 59 Hz, so 60 fps is all it can show.
+config.front_end = 'WebGpu'
+config.webgpu_power_preference = 'HighPerformance'
+config.max_fps = 60
+config.animation_fps = 60
+-- No title bar: the minimize/maximize/close buttons move into the tab bar, which
+-- therefore has to stay visible even with a single tab.
+config.window_decorations = 'INTEGRATED_BUTTONS|RESIZE'
 config.window_padding = { left = 8, right = 8, top = 4, bottom = 4 }
 config.enable_scroll_bar = true
 config.scrollback_lines = 10000
-config.default_cursor_style = 'BlinkingBar'
+config.default_cursor_style = 'SteadyBar' -- no blink, so an idle terminal never redraws
 
--- Tabs: hidden until there is more than one, like alwaysShowTabs = false
+-- Tabs: always shown, because the window buttons live in the tab bar
 config.use_fancy_tab_bar = false
-config.hide_tab_bar_if_only_one_tab = true
+config.hide_tab_bar_if_only_one_tab = false
 config.tab_bar_at_bottom = false
 
 -- winget updates WezTerm (see upall), so skip its own update check

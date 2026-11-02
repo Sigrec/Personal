@@ -57,8 +57,11 @@ if ($host.Name -eq 'ConsoleHost')
     }
 }
 
-# System summary on a fresh interactive terminal (skipped for -Command / -File runs)
-if ($host.Name -eq 'ConsoleHost' -and (Get-Command fastfetch -ErrorAction SilentlyContinue) -and
+# System summary on a fresh interactive terminal (skipped for -Command / -File runs).
+# In WezTerm only the first pane of a session shows it, so new tabs and splits open
+# faster; run `fastfetch --config S:\Personal\fastfetch\config.jsonc` for it on demand.
+if ($host.Name -eq 'ConsoleHost' -and (-not $env:WEZTERM_PANE -or $env:WEZTERM_PANE -eq '0') -and
+    (Get-Command fastfetch -ErrorAction SilentlyContinue) -and
     -not ([Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-(c|command|f|file|encodedcommand)$' })) {
     fastfetch --config "S:\Personal\fastfetch\config.jsonc"
 }

@@ -106,7 +106,7 @@ There are three ways to open a file:
 | `u` `d` | Half a screen up or down |
 | `+` `-` or `i` `o` | Zoom in or out |
 | `f` or `0` | Fit the whole diagram |
-| `1` | 100% zoom |
+| `1` | 100% zoom at the cursor |
 | `/` | Search node and table names |
 | `n` `N` | Next or previous match |
 | Enter | Keep the matches and leave search |
@@ -117,6 +117,12 @@ There are three ways to open a file:
 
 The mouse wheel zooms at the cursor and dragging pans. Saving the file reloads
 the diagram and keeps the current view.
+
+Colors set in a diagram (`classDef`, `style`, a named Mermaid theme) always win.
+Everything else uses the WezTerm palette, which `wezterm/wezterm.lua` writes out
+for `mmv` when it loads. The window background stays dark, except that a diagram
+naming a light Mermaid theme gets white. Text switches to dark or light when it
+would not read on the fill behind it.
 
 Install it, or rebuild it after changing the source:
 

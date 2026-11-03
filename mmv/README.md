@@ -20,7 +20,8 @@ There is no Mermaid parser or layout engine in here.
 
 ## Install
 
-You need Rust, Node.js and either Edge or Chrome.
+You need Rust, Node.js, the Windows SDK (for the icon resource; it comes with
+the Visual Studio C++ tools) and either Edge or Chrome.
 
 ```powershell
 winget install Rustlang.Rustup
@@ -59,7 +60,7 @@ prompt back straight away, use `Start-Process mmv file.mmd`.
 | `+` `-` or `i` `o` | Zoom in or out |
 | Wheel, left drag | Zoom at the cursor, pan |
 | `f` or `0` | Fit the whole diagram |
-| `1` | 100% zoom |
+| `1` | 100% zoom at the cursor |
 | `/` | Search node and table names |
 | `n` `N` | Next or previous match |
 | Enter | Keep the matches and leave search |
@@ -76,8 +77,20 @@ When zoomed far out, the diagram's own text is too small to read and is not
 drawn. Node names appear as labels instead, and any that would overlap are
 hidden, largest tables first.
 
+While a diagram first loads, the window shows an animated ring with the file
+name, the current stage and the seconds so far. Later reloads keep the diagram
+on screen and report progress in the status line.
+
 Saving the file re-renders it and keeps the current view. If the new version
 has a syntax error, the old diagram stays up with the error in the status line.
+
+## Errors
+
+A missing file or a folder stops mmv before any window opens. A diagram that
+fails to render on first open closes the window. Either way the error goes to
+the terminal and the exit code is non-zero: `2` for a bad path, `1` for a failed
+render. When mmv has no terminal, as when yazi or WezTerm starts it, the error
+appears in a message box instead.
 
 ## Yazi
 
@@ -99,9 +112,9 @@ prepend_rules = [
 
 ## WezTerm
 
-`wezterm/wezterm.lua` in this repo already has this binding. Alt+Shift+M asks for
-a path and opens it without tying up a pane. Give it a full path, because the
-process does not start in the pane's folder.
+`wezterm/wezterm.lua` in this repo already has this binding. Alt+Shift+M asks
+for a path and opens it without tying up a pane. Give it a full path, because
+the process does not start in the pane's folder.
 
 ```lua
 {
@@ -121,10 +134,40 @@ process does not start in the pane's folder.
 WezTerm has to have `~\.cargo\bin` on its PATH, so restart it after installing
 Rust.
 
-## Colours and limits
+## Colours
 
-- The palette is Wild West Vibes, set in `MERMAID_CONFIG` in `src/source.rs`.
-  Changing it changes the cache key, so diagrams re-render.
+The diagram's own colours always win. In order:
+
+1. **Set in the diagram:** `classDef`, `style`, `linkStyle`, `themeVariables`.
+2. **A Mermaid theme the diagram names**, such as `theme: forest` in the front
+   matter or a `%%{init}%%` directive. Mermaid's colours are then used as they
+   are.
+3. **The terminal's palette**, for everything else, including mmv's status line
+   and search highlights.
+
+The window background does not come from the terminal. It is white for a diagram
+naming a light Mermaid theme (`default`, `forest`, `neutral` or `base`), and
+otherwise a fixed dark colour, including for `theme: dark`. A palette whose text
+would be too dark to read on the dark background is ignored. `themeVariables`
+alone does not count as naming a theme, so its `background` value has no effect.
+
+Under the terminal palette, text that would not read on the fill behind it
+switches to dark or light. This covers a diagram that sets a light fill with no
+text colour, such as `style A fill:#ffe0b2`. A named Mermaid theme or an `.svg`
+input is left alone.
+
+Edge labels sit in a solid, outlined box so they stand out from the lines.
+
+The palette comes from `%LOCALAPPDATA%\mmv\terminal-palette.txt`, one
+`key=#rrggbb` per line, with the keys `foreground`, `ansi0` to `ansi7` and
+`bright0` to `bright7`. `wezterm/wezterm.lua` in this repo writes it from
+`config.colors` whenever WezTerm loads its config, so a new scheme reaches mmv
+the next time it opens a file; an open window keeps its colours until reopened.
+Without the file, mmv uses Wild West Vibes. The palette is part of the cache
+key, so changing it re-renders diagrams.
+
+## Limits
+
 - Gradients draw as their first colour, translucent paints are mixed against
   the background, and drop shadows and clip paths are ignored. Mermaid diagrams
   rarely depend on these, but a hand-made `.svg` might.
@@ -139,6 +182,7 @@ Rust.
 |----------|---------|
 | `MMV_MMDC` | Path to `mmdc.cmd`, if it is not on PATH |
 | `MMV_BROWSER` | Browser for mermaid-cli, instead of Edge or Chrome |
+| `MMV_PALETTE` | Palette file to use instead of the one WezTerm writes |
 | `MMV_PRESENT` | `immediate` turns off vsync, for measuring |
 
 ## Scripted control
@@ -150,6 +194,7 @@ results to stdout. It is there for testing and benchmarks.
 |---------|--------|
 | `search TEXT` | Search and jump |
 | `zoom S`, `center X Y` | Move the camera |
+| `cursor X Y` | Set the cursor position used by `1` |
 | `bench FRAMES` | Pan for that many frames and print frame times |
 | `settled` | Print `settled` once the view stops moving |
 | `stats` | Print the camera, matches and draw counts |
@@ -171,5 +216,6 @@ usage condition.
 | `sha2` | Cache key | MIT or Apache-2.0 |
 | `bytemuck` | Vertex data | Zlib, Apache-2.0 or MIT |
 | `pollster` | Blocking on GPU setup | Apache-2.0 or MIT |
+| `embed-resource` | Build only: embeds the icon | MIT |
 
 At runtime it calls mermaid-cli, which is MIT.

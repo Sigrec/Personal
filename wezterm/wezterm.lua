@@ -60,6 +60,20 @@ config.colors = {
   },
 }
 
+-- Hand the palette to mmv, which uses it for diagrams that set no colors of
+-- their own. mmv creates the folder the first time it runs.
+local mmv_palette = io.open(os.getenv('LOCALAPPDATA') .. '\\mmv\\terminal-palette.txt', 'w')
+if mmv_palette then
+  mmv_palette:write('foreground=', foreground, '\n')
+  for i, color in ipairs(config.colors.ansi) do
+    mmv_palette:write('ansi', i - 1, '=', color, '\n')
+  end
+  for i, color in ipairs(config.colors.brights) do
+    mmv_palette:write('bright', i - 1, '=', color, '\n')
+  end
+  mmv_palette:close()
+end
+
 -- Window
 -- Solid window. The Acrylic blur (win32_system_backdrop = 'Acrylic' with an opacity
 -- below 1.0) made Windows recomposite every frame and added input lag. A plain

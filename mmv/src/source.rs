@@ -1,6 +1,7 @@
 //! Turns an input file into an SVG on disk: runs mermaid-cli once per content
 //! hash and keeps the result in the cache folder.
 
+use crate::theme::{self, Rgb, TextContrast, Theme};
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::os::windows::process::CommandExt;
@@ -8,41 +9,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-/// Mermaid config. The limits are raised for very large diagrams and the
-/// palette is Wild West Vibes, the same scheme as the WezTerm config.
-const MERMAID_CONFIG: &str = r##"{
-  "maxTextSize": 50000000,
-  "maxEdges": 200000,
-  "theme": "base",
-  "look": "classic",
-  "htmlLabels": false,
-  "flowchart": { "htmlLabels": false },
-  "er": { "useMaxWidth": false },
-  "class": { "htmlLabels": false },
-  "themeVariables": {
-    "darkMode": true,
-    "background": "#1D1A23",
-    "fontFamily": "Segoe UI, Arial, sans-serif",
-    "primaryColor": "#2a2533",
-    "primaryBorderColor": "#7790A8",
-    "primaryTextColor": "#E1DFE5",
-    "secondaryColor": "#231f2b",
-    "secondaryBorderColor": "#8D88B6",
-    "secondaryTextColor": "#E1DFE5",
-    "tertiaryColor": "#15121a",
-    "tertiaryBorderColor": "#918A9F",
-    "tertiaryTextColor": "#E1DFE5",
-    "lineColor": "#918A9F",
-    "textColor": "#E1DFE5",
-    "titleColor": "#F0BF5E",
-    "mainBkg": "#2a2533",
-    "nodeBorder": "#7790A8",
-    "edgeLabelBackground": "#1D1A23",
-    "attributeBackgroundColorOdd": "#231f2b",
-    "attributeBackgroundColorEven": "#1f1b27"
-  }
-}"##;
 
 const BROWSERS: [&str; 3] = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -54,13 +20,16 @@ pub struct SvgFile {
     pub path: PathBuf,
     /// True when this load ran mermaid-cli rather than using the cache.
     pub rendered: bool,
+    pub background: Rgb,
+    /// Set under the terminal palette. A theme or SVG the diagram chose is left as it is.
+    pub text_contrast: Option<TextContrast>,
 }
 
-pub fn cache_dir() -> PathBuf {
+pub fn data_dir() -> PathBuf {
     let base = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    base.join("mmv").join("cache")
+    base.join("mmv")
 }
 
 /// Returns the SVG for `input`. `force` ignores any cached copy.
@@ -72,15 +41,24 @@ pub fn svg_for(input: &Path, force: bool, status: &dyn Fn(String)) -> Result<Svg
         return Ok(SvgFile {
             path: input.to_path_buf(),
             rendered: false,
+            background: theme::background_for(None),
+            text_contrast: None,
         });
     }
 
     let bytes = std::fs::read(input).map_err(|e| format!("read {}: {e}", input.display()))?;
-    let dir = cache_dir();
+    let dir = data_dir().join("cache");
     std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
 
+    let theme_name = theme::mermaid_theme_name(&String::from_utf8_lossy(&bytes));
+    let background = theme::background_for(theme_name.as_deref());
+    let named_theme = theme_name.is_some();
+    let palette = Theme::load();
+    let config = palette.mermaid_config(named_theme);
+    let text_contrast = (!named_theme).then(|| palette.text_contrast());
+
     let mut hasher = Sha256::new();
-    hasher.update(MERMAID_CONFIG.as_bytes());
+    hasher.update(config.as_bytes());
     hasher.update(&bytes);
     let mut name = String::new();
     for byte in hasher.finalize().iter().take(16) {
@@ -92,20 +70,31 @@ pub fn svg_for(input: &Path, force: bool, status: &dyn Fn(String)) -> Result<Svg
         return Ok(SvgFile {
             path: svg,
             rendered: false,
+            background,
+            text_contrast,
         });
     }
 
     status("laying out with mermaid-cli...".to_string());
-    run_mmdc(input, &svg, &dir, &name)?;
+    run_mmdc(input, &svg, &dir, &name, &config, named_theme)?;
     Ok(SvgFile {
         path: svg,
         rendered: true,
+        background,
+        text_contrast,
     })
 }
 
-fn run_mmdc(input: &Path, svg: &Path, dir: &Path, name: &str) -> Result<(), String> {
+fn run_mmdc(
+    input: &Path,
+    svg: &Path,
+    dir: &Path,
+    name: &str,
+    config_text: &str,
+    named_theme: bool,
+) -> Result<(), String> {
     let config = dir.join("mermaid-config.json");
-    std::fs::write(&config, MERMAID_CONFIG).map_err(|e| format!("write config: {e}"))?;
+    std::fs::write(&config, config_text).map_err(|e| format!("write config: {e}"))?;
 
     // mmdc picks the renderer from the extension, so the temp name ends in .svg.
     let partial = dir.join(format!("{name}.partial.svg"));
@@ -147,6 +136,11 @@ fn run_mmdc(input: &Path, svg: &Path, dir: &Path, name: &str) -> Result<(), Stri
             .or_else(|| stderr.lines().rfind(|l| !l.trim().is_empty()))
             .unwrap_or("no error text");
         return Err(format!("mermaid-cli failed: {}", reason.trim()));
+    }
+    if !named_theme {
+        let text = std::fs::read_to_string(&partial).map_err(|e| format!("read svg: {e}"))?;
+        std::fs::write(&partial, theme::recolor_svg(&text))
+            .map_err(|e| format!("write svg: {e}"))?;
     }
     std::fs::rename(&partial, svg).map_err(|e| format!("store svg: {e}"))
 }

@@ -71,6 +71,7 @@ pub struct Renderer {
     ui_pipeline: wgpu::RenderPipeline,
     ui_buffer: wgpu::Buffer,
     scene: Option<GpuScene>,
+    background: [u8; 3],
     pub font_system: FontSystem,
     swash_cache: SwashCache,
     viewport: glyphon::Viewport,
@@ -248,6 +249,7 @@ impl Renderer {
             ui_pipeline,
             ui_buffer,
             scene: None,
+            background: BACKGROUND,
             font_system,
             swash_cache,
             viewport,
@@ -286,6 +288,7 @@ impl Renderer {
 
         let usage_v = wgpu::BufferUsages::VERTEX;
         let usage_i = wgpu::BufferUsages::INDEX;
+        self.background = scene.background;
         self.scene = Some(GpuScene {
             shape_vb: init_buffer(&self.device, &scene.shape_vertices, usage_v),
             shape_ib: init_buffer(&self.device, &scene.shape_indices, usage_i),
@@ -373,12 +376,7 @@ impl Renderer {
 
         let mut stats = DrawStats::default();
         {
-            let clear = wgpu::Color {
-                r: f64::from(BACKGROUND[0]) / 255.0,
-                g: f64::from(BACKGROUND[1]) / 255.0,
-                b: f64::from(BACKGROUND[2]) / 255.0,
-                a: 1.0,
-            };
+            let clear = clear_color(self.background);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("world"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -463,6 +461,16 @@ impl Renderer {
         self.queue.present(frame);
         self.atlas.trim();
         Some(stats)
+    }
+}
+
+fn clear_color(background: [u8; 3]) -> wgpu::Color {
+    let channel = |i: usize| f64::from(background[i]) / 255.0;
+    wgpu::Color {
+        r: channel(0),
+        g: channel(1),
+        b: channel(2),
+        a: 1.0,
     }
 }
 

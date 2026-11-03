@@ -1,6 +1,7 @@
 //! Parses an SVG with usvg, tessellates it with lyon and buckets the triangles
 //! into grid tiles so the renderer can skip what is off screen.
 
+use crate::theme::TextContrast;
 use bytemuck::{Pod, Zeroable};
 use lt::path::iterator::PathIterator;
 use lt::path::{Path as LyonPath, PathEvent};
@@ -12,7 +13,7 @@ use lyon_tessellation as lt;
 use rayon::prelude::*;
 use usvg::tiny_skia_path::PathSegment;
 
-/// Window background, also what translucent paints are mixed against.
+/// The window background, unless the diagram names a light Mermaid theme.
 pub const BACKGROUND: [u8; 3] = [0x1d, 0x1a, 0x23];
 
 const SHAPE_TOLERANCE: f32 = 0.08;
@@ -63,6 +64,7 @@ pub struct Scene {
     pub nodes: Vec<SearchNode>,
     pub min: [f32; 2],
     pub max: [f32; 2],
+    pub background: [u8; 3],
     pub skipped_paths: usize,
 }
 
@@ -91,13 +93,20 @@ struct Placed {
     max: [f32; 2],
 }
 
-pub fn build(svg_text: &str) -> Result<Scene, String> {
+pub fn build(
+    svg_text: &str,
+    background: [u8; 3],
+    text_contrast: Option<TextContrast>,
+) -> Result<Scene, String> {
     let mut options = usvg::Options::default();
     options.fontdb_mut().load_system_fonts();
     let tree = usvg::Tree::from_str(svg_text, &options).map_err(|e| format!("parse svg: {e}"))?;
 
     let mut jobs = Vec::new();
-    walk(tree.root(), 1.0, false, &mut jobs);
+    walk(tree.root(), 1.0, false, background, &mut jobs);
+    if let Some(pair) = text_contrast {
+        fix_text_contrast(&mut jobs, background, pair);
+    }
 
     let total = jobs.len().max(1) as f32 + 2.0;
     let meshes: Vec<Option<Placed>> = jobs
@@ -128,24 +137,74 @@ pub fn build(svg_text: &str) -> Result<Scene, String> {
         nodes: search_nodes(svg_text, &tree),
         min,
         max,
+        background,
         skipped_paths,
     };
     bucket(&placed, &mut scene);
     Ok(scene)
 }
 
-fn walk(group: &usvg::Group, opacity: f32, is_text: bool, jobs: &mut Vec<Job>) {
+/// Recolours text that would not read on the topmost fill painted behind it.
+fn fix_text_contrast(jobs: &mut [Job], background: [u8; 3], pair: TextContrast) {
+    let mut fills: Vec<([f32; 2], [f32; 2], [u8; 3])> = Vec::new();
+    for job in jobs {
+        let Job::Fill {
+            path,
+            color,
+            is_text,
+            ..
+        } = job
+        else {
+            continue;
+        };
+        let Some((min, max)) = path_extent(path) else {
+            continue;
+        };
+        let rgb = [color[0], color[1], color[2]];
+        if !*is_text {
+            fills.push((min, max, rgb));
+            continue;
+        }
+        let center = [(min[0] + max[0]) * 0.5, (min[1] + max[1]) * 0.5];
+        let backdrop = fills
+            .iter()
+            .rev()
+            .find(|(lo, hi, _)| {
+                center[0] >= lo[0] && center[0] <= hi[0] && center[1] >= lo[1] && center[1] <= hi[1]
+            })
+            .map_or(background, |fill| fill.2);
+        let readable = pair.resolve(rgb, backdrop);
+        *color = [readable[0], readable[1], readable[2], color[3]];
+    }
+}
+
+fn path_extent(path: &LyonPath) -> Option<([f32; 2], [f32; 2])> {
+    extent(path.iter().flat_map(|event| {
+        let (a, b, c) = match event {
+            PathEvent::Begin { at } => (Some(at), None, None),
+            PathEvent::Line { to, .. } => (Some(to), None, None),
+            PathEvent::Quadratic { ctrl, to, .. } => (Some(ctrl), Some(to), None),
+            PathEvent::Cubic {
+                ctrl1, ctrl2, to, ..
+            } => (Some(ctrl1), Some(ctrl2), Some(to)),
+            PathEvent::End { .. } => (None, None, None),
+        };
+        [a, b, c].into_iter().flatten().map(|p| p.to_array())
+    }))
+}
+
+fn walk(group: &usvg::Group, opacity: f32, is_text: bool, bg: [u8; 3], jobs: &mut Vec<Job>) {
     for child in group.children() {
         match child {
-            usvg::Node::Group(g) => walk(g, opacity * g.opacity().get(), is_text, jobs),
-            usvg::Node::Path(p) => add_path(p, opacity, is_text, jobs),
-            usvg::Node::Text(t) => walk(t.flattened(), opacity, true, jobs),
+            usvg::Node::Group(g) => walk(g, opacity * g.opacity().get(), is_text, bg, jobs),
+            usvg::Node::Path(p) => add_path(p, opacity, is_text, bg, jobs),
+            usvg::Node::Text(t) => walk(t.flattened(), opacity, true, bg, jobs),
             usvg::Node::Image(_) => {}
         }
     }
 }
 
-fn add_path(p: &usvg::Path, opacity: f32, is_text: bool, jobs: &mut Vec<Job>) {
+fn add_path(p: &usvg::Path, opacity: f32, is_text: bool, bg: [u8; 3], jobs: &mut Vec<Job>) {
     if !p.is_visible() {
         return;
     }
@@ -153,7 +212,7 @@ fn add_path(p: &usvg::Path, opacity: f32, is_text: bool, jobs: &mut Vec<Job>) {
     let path = to_lyon(p, tf);
 
     let fill = p.fill().and_then(|fill| {
-        let color = solid_color(fill.paint(), fill.opacity().get() * opacity)?;
+        let color = solid_color(fill.paint(), fill.opacity().get() * opacity, bg)?;
         let rule = match fill.rule() {
             usvg::FillRule::NonZero => lt::FillRule::NonZero,
             usvg::FillRule::EvenOdd => lt::FillRule::EvenOdd,
@@ -170,7 +229,7 @@ fn add_path(p: &usvg::Path, opacity: f32, is_text: bool, jobs: &mut Vec<Job>) {
         None
     } else {
         p.stroke().and_then(|stroke| {
-            let color = solid_color(stroke.paint(), stroke.opacity().get() * opacity)?;
+            let color = solid_color(stroke.paint(), stroke.opacity().get() * opacity, bg)?;
             let scale = (tf.sx * tf.sy - tf.kx * tf.ky).abs().sqrt();
             let dashed = stroke.dasharray().and_then(|pattern| {
                 let scaled: Vec<f32> = pattern.iter().map(|d| d * scale).collect();
@@ -233,7 +292,7 @@ fn to_lyon(p: &usvg::Path, tf: usvg::Transform) -> LyonPath {
 
 /// Depth testing replaces blending, so translucent paints are mixed against the
 /// background here. Gradients take their first stop and patterns a flat grey.
-fn solid_color(paint: &usvg::Paint, alpha: f32) -> Option<[u8; 4]> {
+fn solid_color(paint: &usvg::Paint, alpha: f32, bg: [u8; 3]) -> Option<[u8; 4]> {
     if alpha < 0.02 {
         return None;
     }
@@ -243,13 +302,9 @@ fn solid_color(paint: &usvg::Paint, alpha: f32) -> Option<[u8; 4]> {
         usvg::Paint::RadialGradient(g) => first_stop(g.stops())?,
         usvg::Paint::Pattern(_) => (0x91, 0x8a, 0x9f),
     };
-    let mix = |c: u8, bg: u8| (f32::from(c) * alpha + f32::from(bg) * (1.0 - alpha)).round() as u8;
-    Some([
-        mix(r, BACKGROUND[0]),
-        mix(g, BACKGROUND[1]),
-        mix(b, BACKGROUND[2]),
-        255,
-    ])
+    let mix =
+        |c: u8, under: u8| (f32::from(c) * alpha + f32::from(under) * (1.0 - alpha)).round() as u8;
+    Some([mix(r, bg[0]), mix(g, bg[1]), mix(b, bg[2]), 255])
 }
 
 fn first_stop(stops: &[usvg::Stop]) -> Option<(u8, u8, u8)> {
@@ -510,7 +565,7 @@ impl TileBuilder {
 }
 
 /// Finds the searchable nodes: every `<g class="node ...">` with an id, named
-/// from the id for ER entities and from its first text for everything else.
+/// from the id for ER entities and from its label text for everything else.
 fn search_nodes(svg_text: &str, tree: &usvg::Tree) -> Vec<SearchNode> {
     let Ok(doc) = usvg::roxmltree::Document::parse(svg_text) else {
         return Vec::new();
@@ -524,15 +579,9 @@ fn search_nodes(svg_text: &str, tree: &usvg::Tree) -> Vec<SearchNode> {
         let Some(id) = element.attribute("id").filter(|_| is_node) else {
             continue;
         };
-        let name = entity_name(id).map(str::to_string).or_else(|| {
-            element
-                .descendants()
-                .filter(|n| n.is_text())
-                .filter_map(|n| n.text())
-                .map(str::trim)
-                .find(|t| !t.is_empty())
-                .map(str::to_string)
-        });
+        let name = entity_name(id)
+            .map(str::to_string)
+            .or_else(|| label_text(element));
         let (Some(name), Some(found)) = (name, tree.node_by_id(id)) else {
             continue;
         };
@@ -569,9 +618,96 @@ fn grow_bounds(node: &usvg::Node, min: &mut [f32; 2], max: &mut [f32; 2]) {
     *max = [max[0].max(bounds.right()), max[1].max(bounds.bottom())];
 }
 
+/// A label's words, with its wrapped lines joined by spaces. Mermaid puts each
+/// word in its own tspan inside one tspan per line, keeping the spaces.
+fn label_text(element: usvg::roxmltree::Node) -> Option<String> {
+    let text_of = |node: usvg::roxmltree::Node| -> String {
+        node.descendants()
+            .filter(|n| n.is_text())
+            .filter_map(|n| n.text())
+            .collect()
+    };
+    let mut lines: Vec<String> = element
+        .descendants()
+        .filter(|n| {
+            n.attribute("class")
+                .is_some_and(|c| c.split_ascii_whitespace().any(|t| t == "text-outer-tspan"))
+        })
+        .map(text_of)
+        .collect();
+    if lines.is_empty() {
+        lines.push(text_of(element));
+    }
+    let name = join_wrapped_lines(&lines);
+    (!name.is_empty()).then_some(name)
+}
+
+/// Joins a label's lines with spaces, except where Mermaid cut a long word to
+/// fit: a full-width line of one word followed by a line starting in lowercase.
+fn join_wrapped_lines(lines: &[String]) -> String {
+    let longest = lines
+        .iter()
+        .map(|l| l.trim().chars().count())
+        .max()
+        .unwrap_or(0);
+    let mut name = String::new();
+    let mut previous_cut = false;
+    for line in lines {
+        let line = line.split_whitespace().collect::<Vec<_>>().join(" ");
+        if line.is_empty() {
+            continue;
+        }
+        let starts_lowercase = line.chars().next().is_some_and(char::is_lowercase);
+        if !name.is_empty() && !(previous_cut && starts_lowercase) {
+            name.push(' ');
+        }
+        name.push_str(&line);
+        previous_cut = !line.contains(' ') && line.chars().count() + 2 >= longest;
+    }
+    name
+}
+
 /// `my-svg-entity-app_user-0` is the entity `app_user`.
 fn entity_name(id: &str) -> Option<&str> {
     let (_, rest) = id.split_once("-entity-")?;
     let (name, suffix) = rest.rsplit_once('-')?;
     suffix.chars().all(|c| c.is_ascii_digit()).then_some(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::join_wrapped_lines;
+
+    fn join(lines: &[&str]) -> String {
+        let lines: Vec<String> = lines.iter().map(|l| (*l).to_string()).collect();
+        join_wrapped_lines(&lines)
+    }
+
+    #[test]
+    fn rejoins_a_word_mermaid_cut() {
+        assert_eq!(
+            join(&["DatabaseCleanu", "p Lambda", "(Scheduled)"]),
+            "DatabaseCleanup Lambda (Scheduled)"
+        );
+        assert_eq!(
+            join(&["CloudFront CDN", "(BrandAssetsDist", "ribution)"]),
+            "CloudFront CDN (BrandAssetsDistribution)"
+        );
+    }
+
+    #[test]
+    fn keeps_spaces_between_whole_words() {
+        assert_eq!(join(&["Cloud", "Map"]), "Cloud Map");
+        assert_eq!(
+            join(&[
+                "AWS AppConfig",
+                "(shared",
+                "non-secret",
+                "config,",
+                "hot-reload via"
+            ]),
+            "AWS AppConfig (shared non-secret config, hot-reload via"
+        );
+        assert_eq!(join(&["Notification", "Lambda"]), "Notification Lambda");
+    }
 }

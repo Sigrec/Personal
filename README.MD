@@ -1,6 +1,7 @@
 # Personal PowerShell setup
 
-My PowerShell 7 profile, helper scripts, Oh My Posh themes and WezTerm config.
+My PowerShell 7 profile, helper scripts, Oh My Posh themes, WezTerm config and
+`mmv`, a viewer for large Mermaid diagrams.
 
 | Path | What it is |
 |------|------------|
@@ -10,6 +11,7 @@ My PowerShell 7 profile, helper scripts, Oh My Posh themes and WezTerm config.
 | `fastfetch/` | fastfetch config and the ASCII logos (`options/2_triskele.txt` is active; the others are spares) |
 | `wezterm/wezterm.lua` | WezTerm config, my main terminal (see [WezTerm](#wezterm)); `~/.wezterm.lua` loads it |
 | `btop/wild_west_vibes.theme` | btop theme; symlinked into `%LOCALAPPDATA%\Microsoft\WinGet\Links\themes` (btop reads themes next to the `btop.exe` link) |
+| `mmv/` | GPU viewer for large Mermaid diagrams (see [mmv](#mmv)), a Rust project of its own |
 | `settings.json` | Windows Terminal settings, kept as a fallback (the live copy is under `%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState`) |
 
 ## Scripts
@@ -65,6 +67,7 @@ What the config sets:
 | Alt+Arrows | Move between panes |
 | Alt+Shift+R | Rename the current tab (empty name resets it) |
 | Ctrl+Shift+W | Close the current pane (no confirmation) |
+| Alt+Shift+M | Ask for a file and open it in [mmv](#mmv) (use a full path) |
 
 Setup on a new machine: install WezTerm and the CaskaydiaCove Nerd Font
 (from nerdfonts.com), then create the stub:
@@ -82,6 +85,48 @@ return dofile(path)
 
 WezTerm updates through winget, so its own update check is off in the config.
 
+## mmv
+
+`mmv` opens Mermaid diagrams too big for normal previews in a GPU-rendered,
+keyboard-driven window. Mermaid still does the layout, so the first open of a
+large file takes a few seconds; after that the layout comes from a cache until
+the file changes.
+
+There are three ways to open a file:
+
+- **Terminal:** `mmv diagram.mmd`. The command holds the terminal until the
+  window closes; `Start-Process mmv diagram.mmd` gives the prompt back.
+- **Yazi:** press Enter on a `.mmd` or `.mermaid` file. Shift+O still offers the
+  editor.
+- **WezTerm:** press Alt+Shift+M and type a full path.
+
+| Key | Action |
+|-----|--------|
+| `h` `j` `k` `l` or arrows | Pan; hold Shift to go faster |
+| `u` `d` | Half a screen up or down |
+| `+` `-` or `i` `o` | Zoom in or out |
+| `f` or `0` | Fit the whole diagram |
+| `1` | 100% zoom |
+| `/` | Search node and table names |
+| `n` `N` | Next or previous match |
+| Enter | Keep the matches and leave search |
+| Esc | Cancel search and clear the matches |
+| `r` | Re-render, ignoring the cache |
+| `?` | Show all the keys |
+| `q` | Quit |
+
+The mouse wheel zooms at the cursor and dragging pans. Saving the file reloads
+the diagram and keeps the current view.
+
+Install it, or rebuild it after changing the source:
+
+```powershell
+cargo install --path S:\Personal\mmv --locked
+```
+
+[`mmv/README.md`](mmv/README.md) has the prerequisites, how it works and its
+limits.
+
 ## Setup on a new machine
 
 Install the tools:
@@ -92,7 +137,8 @@ winget install ajeetdsouza.zoxide
 winget install junegunn.fzf
 ```
 
-For the terminal itself, follow [WezTerm](#wezterm) above.
+For the terminal itself, follow [WezTerm](#wezterm) above. For the diagram
+viewer, follow [Install](mmv/README.md#install) in its README.
 
 Install the PowerShell modules:
 

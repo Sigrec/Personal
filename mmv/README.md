@@ -4,7 +4,7 @@ A keyboard-driven, GPU-rendered viewer for large Mermaid diagrams on Windows.
 Run `mmv file.mmd` from the terminal and it opens a native window that draws
 the diagram as vector geometry through Direct3D 12.
 
-It exists for diagrams that normal previews refuse, such as a 104 KB ER diagram
+It exists for diagrams that normal previews refuse, such as a 100 KB ER diagram
 over Mermaid's default `maxTextSize`.
 
 ## How it works
@@ -43,7 +43,7 @@ cargo install --path S:\Personal\mmv
 ## Usage
 
 ```powershell
-mmv Platform_ER_Diagram.mmd
+mmv diagram.mmd
 ```
 
 The input can be any Mermaid source file, or an `.svg` to skip mermaid-cli. The
@@ -81,8 +81,8 @@ has a syntax error, the old diagram stays up with the error in the status line.
 
 ## Yazi
 
-Add an opener and a rule to `yazi/yazi.toml`, keeping the rules already in
-`prepend_rules`. This uses the opener syntax of Yazi 26.9.
+`yazi/yazi.toml` in this repo already has this, so Enter on a Mermaid file
+opens it in mmv. It uses the opener syntax of Yazi 26.9.
 
 ```toml
 [opener]
@@ -99,10 +99,9 @@ prepend_rules = [
 
 ## WezTerm
 
-This binding asks for a path and opens it without tying up a pane. Add it to
-`config.keys` in `wezterm/wezterm.lua`. Alt+Shift+M is free in the current
-config. Give it a full path, because the process does not start in the pane's
-folder.
+`wezterm/wezterm.lua` in this repo already has this binding. Alt+Shift+M asks for
+a path and opens it without tying up a pane. Give it a full path, because the
+process does not start in the pane's folder.
 
 ```lua
 {

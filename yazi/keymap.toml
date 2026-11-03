@@ -2,5 +2,9 @@
 prepend_keymap = [
   # Open the folder of the hovered (or selected) file in File Pilot. File Pilot
   # takes a folder path; there is no documented way to select the file in it.
+  # l enters a folder or opens the hovered file, like Enter
+  { on = "l", run = "plugin smart-enter", desc = "Enter the folder, or open the file" },
+  # T maximizes the preview pane (rendered markdown); press again to restore
+  { on = "T", run = "plugin toggle-pane max-preview", desc = "Maximize or restore the preview pane" },
   { on = "R", run = 'shell "FPilot.exe %d1" --orphan', desc = "Open folder in File Pilot" },
 ]

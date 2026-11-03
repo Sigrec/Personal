@@ -4,10 +4,19 @@
 # preview the rest of the window.
 ratio = [2, 4, 12]
 
+[opener]
+# mmv is the GPU viewer for large Mermaid diagrams (../mmv).
+mmv = [
+  { run = "mmv %s", orphan = true, desc = "mmv", for = "windows" },
+]
+
 [open]
+# Mermaid files open in mmv.
 # HTML, SVG and PDF open with the Windows default app (the browser for HTML and
 # SVG) instead of the editor. Shift+O still offers the editor from the open menu.
 prepend_rules = [
+  { url = "*.mmd", use = ["mmv", "edit", "reveal"] },
+  { url = "*.mermaid", use = ["mmv", "edit", "reveal"] },
   { url = "*.html", use = ["open", "edit", "reveal"] },
   { url = "*.htm", use = ["open", "edit", "reveal"] },
   { url = "*.svg", use = ["open", "edit", "reveal"] },
@@ -15,6 +24,12 @@ prepend_rules = [
 ]
 
 [plugin]
+# Git status signs (plugins/git.yazi, set up in init.lua)
+prepend_fetchers = [
+  { url = "*", run = "git", group = "git" },
+  { url = "*/", run = "git", group = "git" },
+]
+
 # Markdown renders in the preview pane through glow (plugins/mdglow.yazi).
 prepend_previewers = [
   { url = "*.md", run = "mdglow" },

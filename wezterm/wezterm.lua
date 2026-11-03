@@ -128,6 +128,20 @@ config.keys = {
     },
   },
 
+  -- Open a Mermaid file in mmv; give it a full path
+  {
+    key = 'm',
+    mods = 'ALT|SHIFT',
+    action = act.PromptInputLine {
+      description = 'Mermaid file to open in mmv:',
+      action = wezterm.action_callback(function(_, _, line)
+        if line and line ~= '' then
+          wezterm.background_child_process { 'mmv', line }
+        end
+      end),
+    },
+  },
+
   -- Panes (same shortcuts as Windows Terminal)
   { key = 'd', mods = 'ALT|SHIFT', action = wezterm.action_callback(split_auto) },
   { key = 'phys:Minus', mods = 'ALT|SHIFT', action = act.SplitPane { direction = 'Down' } },

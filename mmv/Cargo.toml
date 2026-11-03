@@ -1,0 +1,21 @@
+[package]
+name = "mmv"
+version = "0.1.0"
+edition = "2024"
+description = "GPU viewer for large Mermaid diagrams"
+publish = false
+
+[dependencies]
+bytemuck = "1.25.2"
+glyphon = "0.12.0"
+lyon_tessellation = "1.0.23"
+pollster = "1.0.1"
+rayon = "1.12.0"
+sha2 = "0.11.1"
+usvg = "0.49.0"
+wgpu = "30.0.1"
+winit = "0.30.13"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
